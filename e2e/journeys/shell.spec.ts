@@ -23,8 +23,10 @@ test.describe("authenticated shell", () => {
       await expect(page.locator("aside")).toBeVisible();
     }
     const nav = page.getByRole("navigation", { name: "Main" });
+    // Group labels are the uppercase <p> captions; "Voice" is both a group and
+    // an item in twin, so scope to the caption element rather than any text.
     for (const group of ["Create", "My Videos", "Gallery", "Voice"]) {
-      await expect(nav.getByText(group, { exact: true })).toBeVisible();
+      await expect(nav.locator("p", { hasText: new RegExp(`^${group}$`) })).toBeVisible();
     }
     await expect(nav.getByRole("link", { name: "Educational" })).toHaveAttribute("href", "/ai-avatar/my?category=MODERN");
     await expect(nav.getByRole("link", { name: "Historical" })).toHaveAttribute("href", "/ai-avatar/my?category=HISTORY");

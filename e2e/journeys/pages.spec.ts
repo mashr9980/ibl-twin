@@ -38,7 +38,7 @@ test.describe("screens", () => {
 
   test("Voices: heading and Clone Voice control", async ({ page }) => {
     await page.goto("/scripts");
-    await expect(page.getByRole("heading", { name: "Voices" })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("heading", { name: "Voices", exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole("button", { name: /Clone Voice/ })).toBeVisible();
     await expect(page.getByText(GATE)).toBeVisible();
   });
