@@ -19,7 +19,7 @@ export function AppFooter() {
       <div className="flex items-center gap-1.5">
         <span>Powered by</span>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="https://ibl.ai/images/iblai-logo.png" alt="ibl.ai" className="h-4 w-auto" />
+        <img src="/images/iblai-logo.png" alt="ibl.ai" className="h-4 w-auto" />
       </div>
     </footer>
   );

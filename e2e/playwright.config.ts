@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 import dotenv from "dotenv";
 import path from "path";
 
-dotenv.config({ path: path.resolve(__dirname, ".env.development") });
+dotenv.config({ path: path.resolve(__dirname, process.env.PW_ENV ?? ".env.development") });
 
 const APP_HOST = process.env.APP_HOST || "http://localhost:3000";
 
@@ -15,7 +15,7 @@ export default defineConfig({
   timeout: 60_000,
   use: {
     baseURL: APP_HOST,
-    storageState: "playwright/.auth/user-setup-chromium.json",
+    storageState: process.env.PW_STORAGE ?? "playwright/.auth/user-setup-chromium.json",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

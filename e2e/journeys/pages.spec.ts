@@ -63,9 +63,17 @@ test.describe("screens", () => {
 test.describe("mobile layout", () => {
   test("no horizontal overflow on any screen", async ({ page, isMobile }) => {
     test.skip(!isMobile, "mobile only");
-    for (const path of ["/ai-avatar/generate", "/ai-avatar/my", "/videos/my", "/scripts"]) {
+    // The ibl SDK keeps a WebSocket open, so "networkidle" never arrives on the
+    // live host. Wait for each screen's heading instead, then measure.
+    const screens: [string, string][] = [
+      ["/ai-avatar/generate", "Create Twin"],
+      ["/ai-avatar/my", "Gallery"],
+      ["/videos/my", "My Videos"],
+      ["/scripts", "Voices"],
+    ];
+    for (const [path, heading] of screens) {
       await page.goto(path);
-      await page.waitForLoadState("networkidle");
+      await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible({ timeout: 30_000 });
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `${path} overflows by ${overflow}px`).toBeLessThanOrEqual(0);
     }

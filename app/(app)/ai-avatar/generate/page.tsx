@@ -224,7 +224,7 @@ function CreateTwinInner() {
         <h1 className="text-[24px] font-semibold tracking-[-0.6px] text-[var(--content-title)]">Create Twin</h1>
         <div className="flex items-center gap-3 rounded-[var(--radius-pill)] border border-[var(--border)] bg-[var(--card)] px-4 py-2.5 text-[13px] text-[var(--content-title)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="https://ibl.ai/images/iblai-logo.png" alt="ibl.ai" className="h-4 w-auto" />
+          <img src="/images/iblai-logo.png" alt="ibl.ai" className="h-4 w-auto" />
           <span>Want to Create a Hyper-Realistic Live Avatar?</span>
           <a href="mailto:support@iblai.zendesk.com" className="font-medium text-[var(--brand)] hover:underline">Contact Us</a>
         </div>
