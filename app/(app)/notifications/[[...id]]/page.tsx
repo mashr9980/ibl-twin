@@ -50,8 +50,9 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div data-twin-notifications className="mx-auto w-full flex-1 overflow-auto px-4 py-8 md:w-[75vw] md:px-0">
-      <div className="rounded-lg border border-[var(--border-color)] bg-white overflow-hidden">
+    <div data-twin-notifications className="container mx-auto w-full max-w-4xl flex-1 px-4 py-6">
+      <h1 className="mb-6 text-[24px] font-semibold tracking-[-0.6px] text-[var(--content-title)]">Notifications</h1>
+      <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-card)]">
         <NotificationDisplay
           org={tenantKey}
           userId={username}
