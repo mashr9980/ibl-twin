@@ -12,8 +12,6 @@ export type SlimAvatar = {
   avatar_name: string;
   gender?: string;
   preview_image_url?: string;
-  preview_video_url?: string;
-  premium?: boolean;
   type?: string;
 };
 
@@ -26,7 +24,16 @@ export type SlimTalkingPhoto = {
 type Raw = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
 
-export function trimAvatarCatalogue(payload: unknown): unknown {
+export type TrimOptions = {
+  /**
+   * HeyGen's envelope also carries every public talking photo (~8,000 rows,
+   * 88% of the bytes). Nothing in the app lists them, so they're dropped
+   * unless a caller opts in with `?include=talking_photos`.
+   */
+  includeTalkingPhotos?: boolean;
+};
+
+export function trimAvatarCatalogue(payload: unknown, opts: TrimOptions = {}): unknown {
   if (!payload || typeof payload !== "object") return payload;
   const data = (payload as Raw).data as Raw | undefined;
   if (!data || typeof data !== "object") return payload;
@@ -38,14 +45,12 @@ export function trimAvatarCatalogue(payload: unknown): unknown {
         const slim: SlimAvatar = { avatar_id: id, avatar_name: name };
         const gender = str(a.gender); if (gender) slim.gender = gender;
         const img = str(a.preview_image_url); if (img) slim.preview_image_url = img;
-        const vid = str(a.preview_video_url); if (vid) slim.preview_video_url = vid;
-        if (typeof a.premium === "boolean") slim.premium = a.premium;
         const type = str(a.type); if (type) slim.type = type;
         return [slim];
       })
     : undefined;
 
-  const talking_photos = Array.isArray(data.talking_photos)
+  const talking_photos = opts.includeTalkingPhotos && Array.isArray(data.talking_photos)
     ? (data.talking_photos as Raw[]).flatMap((t): SlimTalkingPhoto[] => {
         const id = str(t.talking_photo_id);
         if (!id) return [];
@@ -55,10 +60,11 @@ export function trimAvatarCatalogue(payload: unknown): unknown {
       })
     : undefined;
 
+  const { talking_photos: _dropped, ...rest } = data;
   return {
     ...(payload as Raw),
     data: {
-      ...data,
+      ...rest,
       ...(avatars ? { avatars } : {}),
       ...(talking_photos ? { talking_photos } : {}),
     },

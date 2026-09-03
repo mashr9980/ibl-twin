@@ -17,15 +17,18 @@ describe("trimAvatarCatalogue", () => {
   it("keeps only the fields the gallery reads and drops malformed rows", () => {
     const out = trimAvatarCatalogue(raw) as typeof raw;
     expect(out.data.avatars).toEqual([
-      { avatar_id: "a1", avatar_name: "Abigail (Upper Body)", gender: "female", preview_image_url: "https://x/a1.png",
-        preview_video_url: "https://x/a1.mp4", premium: false },
+      { avatar_id: "a1", avatar_name: "Abigail (Upper Body)", gender: "female", preview_image_url: "https://x/a1.png" },
     ]);
-    expect(out.data.talking_photos).toEqual([{ talking_photo_id: "t1", talking_photo_name: "Me", preview_image_url: "https://x/t1.png" }]);
+    expect("talking_photos" in out.data).toBe(false);
     expect(out.error).toBeNull();
   });
   it("shrinks the payload substantially", () => {
     const before = JSON.stringify(raw).length, after = JSON.stringify(trimAvatarCatalogue(raw)).length;
     expect(after).toBeLessThan(before / 2);
+  });
+  it("keeps talking photos only when asked", () => {
+    const out = trimAvatarCatalogue(raw, { includeTalkingPhotos: true }) as typeof raw;
+    expect(out.data.talking_photos).toEqual([{ talking_photo_id: "t1", talking_photo_name: "Me", preview_image_url: "https://x/t1.png" }]);
   });
   it("passes anything that isn't a catalogue envelope through untouched", () => {
     expect(trimAvatarCatalogue({ error: "nope" })).toEqual({ error: "nope" });

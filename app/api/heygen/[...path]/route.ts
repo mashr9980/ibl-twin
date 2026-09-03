@@ -108,7 +108,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const method = req.method.toUpperCase();
   const body = method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
 
-  if (isAvatarCatalogue(method, path.join("/"))) {
+  if (isAvatarCatalogue(method, path.join("/")) && req.nextUrl.searchParams.get("include") !== "talking_photos") {
     const memo = catalogueMemo.get(apiKey);
     if (memo && memo.expiresAt > Date.now()) {
       return NextResponse.json(memo.body, { headers: { "Cache-Control": "private, max-age=300", "X-Twin-Cache": "hit" } });
@@ -128,8 +128,9 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   // doesn't wait on HeyGen's slowest endpoint.
   const relPath = path.join("/");
   if (upstream.ok && isAvatarCatalogue(method, relPath)) {
-    const slim = trimAvatarCatalogue(await upstream.json());
-    catalogueMemo.set(apiKey, { body: slim, expiresAt: Date.now() + CATALOGUE_TTL_MS });
+    const includeTalkingPhotos = req.nextUrl.searchParams.get("include") === "talking_photos";
+    const slim = trimAvatarCatalogue(await upstream.json(), { includeTalkingPhotos });
+    if (!includeTalkingPhotos) catalogueMemo.set(apiKey, { body: slim, expiresAt: Date.now() + CATALOGUE_TTL_MS });
     return NextResponse.json(slim, { headers: { "Cache-Control": "private, max-age=300" } });
   }
 
