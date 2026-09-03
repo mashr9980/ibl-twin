@@ -84,14 +84,63 @@ export interface AvatarCatalogue {
  */
 let cataloguePromise: Promise<AvatarCatalogue> | null = null;
 
+/**
+ * The in-memory promise only survives client-side navigation. A hard load —
+ * typing a URL, refreshing, following a link from outside — starts a fresh
+ * module and pays the full 1.6 MB / ~15 s download again.
+ *
+ * sessionStorage bridges that. Only the four fields the UI renders are kept,
+ * which turns ~3.9 MB of JSON into a few hundred KB, comfortably inside the
+ * quota; a quota failure just means no cache, never a broken page.
+ */
+const CACHE_KEY = "twin.avatars.v1";
+const CACHE_TTL_MS = 30 * 60 * 1000;
+
+type SlimAvatar = Pick<HeygenAvatar, "avatar_id" | "avatar_name" | "gender" | "preview_image_url">;
+
+function readSessionCache(): HeygenAvatar[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { at, avatars } = JSON.parse(raw) as { at: number; avatars: SlimAvatar[] };
+    if (!Array.isArray(avatars) || Date.now() - at > CACHE_TTL_MS) return null;
+    return avatars as HeygenAvatar[];
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionCache(avatars: HeygenAvatar[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const slim: SlimAvatar[] = avatars.map((a) => ({
+      avatar_id: a.avatar_id,
+      avatar_name: a.avatar_name,
+      gender: a.gender,
+      preview_image_url: a.preview_image_url,
+    }));
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), avatars: slim }));
+  } catch {
+    /* over quota or storage disabled — caching is an optimisation, not a requirement */
+  }
+}
+
 /** GET /v2/avatars — the stock catalogue plus this account's talking photos. */
 export function listHeygenAvatars(): Promise<AvatarCatalogue> {
   if (cataloguePromise) return cataloguePromise;
+  const cached = readSessionCache();
+  if (cached) {
+    cataloguePromise = Promise.resolve({ avatars: cached, talkingPhotos: [] });
+    return cataloguePromise;
+  }
   cataloguePromise = (async () => {
     const data = unwrap<{ avatars?: HeygenAvatar[]; talking_photos?: HeygenTalkingPhoto[] }>(
       await request("/v2/avatars"),
     );
-    return { avatars: data.avatars ?? [], talkingPhotos: data.talking_photos ?? [] };
+    const avatars = data.avatars ?? [];
+    writeSessionCache(avatars);
+    return { avatars, talkingPhotos: data.talking_photos ?? [] };
   })().catch((err) => {
     cataloguePromise = null; // a failure must not be cached
     throw err;
@@ -102,6 +151,13 @@ export function listHeygenAvatars(): Promise<AvatarCatalogue> {
 /** Drop the cached catalogue so the next call refetches (used by Retry). */
 export function invalidateAvatarCatalogue(): void {
   cataloguePromise = null;
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem(CACHE_KEY);
+    } catch {
+      /* nothing to clear */
+    }
+  }
 }
 
 export interface HeygenVoice {

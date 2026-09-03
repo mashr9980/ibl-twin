@@ -1,5 +1,9 @@
 "use client";
 
+// Side-effect import, kept first: silences the SDK's token logging in
+// production before any of it can run.
+import "@/lib/twin/silence-console";
+
 /**
  * ibl.ai Provider wrapper.
  *

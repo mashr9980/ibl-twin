@@ -74,10 +74,11 @@ test.describe("screens", () => {
     await expect(page.getByText("Create stunning videos using our AI-powered generation.")).toBeVisible();
     await expect(page.locator("article").first()).toBeVisible({ timeout: 45_000 });
 
+    const chips = page.getByRole("main").getByRole("link");
     for (const chip of ["All", "Twin", "Avatar", "Video Clips"]) {
-      await expect(page.getByRole("link", { name: chip, exact: true })).toBeVisible();
+      await expect(chips.filter({ hasText: new RegExp(`^${chip}$`) })).toBeVisible();
     }
-    await page.getByRole("link", { name: "Twin", exact: true }).click();
+    await chips.filter({ hasText: /^Twin$/ }).click();
     await expect(page).toHaveURL(/type=twin/);
   });
 
@@ -105,7 +106,7 @@ test.describe("screens", () => {
     await expect(page.getByRole("button", { name: /Clone Voice/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Pre-built Voices" })).toBeVisible();
     await expect.poll(() => page.locator("li").count(), { timeout: 60_000 }).toBeGreaterThan(10);
-    await expect(page.getByText(/\d+ voices/)).toBeVisible();
+    await expect(page.getByText(/^Showing \d+ of \d+ voices$/)).toBeVisible();
   });
 
   test("Create Video Clip gates its own submit until image and prompt exist", async ({ page }) => {

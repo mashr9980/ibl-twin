@@ -5,7 +5,7 @@ export function AppFooter() {
   return (
     <footer
       style={{ height: "var(--app-footer-height)" }}
-      className="flex flex-none items-center justify-between border-t border-[var(--border)] bg-[var(--background)] px-4 text-[12.5px] text-[var(--content-caption)]"
+      className="flex flex-none items-center justify-between gap-4 border-t border-[var(--border)] bg-[var(--background)] px-4 text-[12.5px] text-[var(--content-caption)]"
     >
       <div className="flex items-center gap-3">
         <Link href="/privacy" className="transition-colors hover:text-[var(--content-title)]">

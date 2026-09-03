@@ -7,12 +7,16 @@ import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
 import { listHeygenVoices, type HeygenVoice } from "@/lib/heygen/rest";
 
+/** 3,169 voices is ~22k DOM nodes. Same page-at-a-time rule as the gallery. */
+const PAGE = 60;
+
 export default function VoicesPage() {
   const credential = useHeygenCredential();
   const [voices, setVoices] = useState<HeygenVoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [playing, setPlaying] = useState<string | null>(null);
+  const [shown, setShown] = useState(PAGE);
   const audio = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -20,7 +24,13 @@ export default function VoicesPage() {
     listHeygenVoices().then(setVoices).finally(() => setLoading(false));
   }, [credential]);
 
-  const visible = useMemo(() => voices.filter((v) => !q || (v.name ?? "").toLowerCase().includes(q.toLowerCase())), [voices, q]);
+  const matching = useMemo(
+    () => voices.filter((v) => !q || (v.name ?? "").toLowerCase().includes(q.toLowerCase())),
+    [voices, q],
+  );
+  const visible = useMemo(() => matching.slice(0, shown), [matching, shown]);
+
+  useEffect(() => setShown(PAGE), [q]);
 
   function toggle(v: HeygenVoice) {
     if (!v.preview_audio) return;
@@ -55,7 +65,7 @@ export default function VoicesPage() {
 
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[16px] font-semibold text-[var(--content-title)]">Pre-built Voices</h2>
-            <span className="text-[12.5px] text-[var(--content-caption)]">{loading ? "…" : `${visible.length} voices`}</span>
+            <span className="text-[12.5px] text-[var(--content-caption)]">{loading ? "…" : `${matching.length} voices`}</span>
           </div>
           <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)]">
             {loading && Array.from({ length: 6 }).map((_, i) => <li key={i} className="h-14 animate-pulse bg-[var(--canvas-muted)]" />)}
@@ -71,6 +81,20 @@ export default function VoicesPage() {
               </li>
             ))}
           </ul>
+
+          {!loading && matching.length > 0 && (
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <p className="text-[12.5px] text-[var(--content-caption)]">
+                Showing {visible.length} of {matching.length} voice{matching.length === 1 ? "" : "s"}
+              </p>
+              {visible.length < matching.length && (
+                <button type="button" onClick={() => setShown((n) => n + PAGE)}
+                  className="h-9 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--card)] px-5 text-[13px] font-medium text-[var(--content-title)] transition-colors hover:bg-[var(--canvas-muted)]">
+                  Load more
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

@@ -27,9 +27,14 @@ import { cn } from "@/lib/utils";
 
 const PAGE = 60;
 
-/** "Amanda in Blue Shirt (Front)" → "Amanda in Blue Shirt" */
+/**
+ * "Amanda in Blue Shirt (Front)" → "Amanda in Blue Shirt"
+ *
+ * Only a parenthesis or a *spaced* dash separates a look. Splitting on any
+ * hyphen turned "Aditya in Blue t-shirt" into "Aditya in Blue t".
+ */
 function characterOf(name: string): string {
-  return name.split(/\s*[(\-]/, 1)[0].trim() || name;
+  return name.split(/\s*\(|\s+-\s+/)[0].trim() || name;
 }
 /** "Amanda in Blue Shirt (Front)" → "Front" */
 function lookOf(name: string): string {
@@ -129,7 +134,13 @@ function PickerInner() {
           </nav>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
             {open.looks.map((a) => (
-              <AvatarCard key={a.avatar_id} avatar={a} onSelect={setSelected} />
+              // Inside a character, the full name repeats the character and
+              // truncates away the one thing that differs — show the look.
+              <AvatarCard
+                key={a.avatar_id}
+                avatar={{ ...a, avatar_name: lookOf(a.avatar_name ?? "") }}
+                onSelect={() => setSelected(a)}
+              />
             ))}
           </div>
         </>
