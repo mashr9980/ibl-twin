@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fallbackPermissions } from "@/hooks/use-rbac-permissions";
+import { fallbackPermissions } from "@/lib/rbac/permissions";
 
 const T = "d0d3b083f95446a59ed6e0a73396ab01";
 // Mirrors web-utils' checkSingleResource so the test pins the contract we rely on.
