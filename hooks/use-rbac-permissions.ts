@@ -14,6 +14,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useSelector } from "react-redux";
+import { selectRbacPermissions } from "@iblai/iblai-js/web-utils";
 
 import config from "@/lib/iblai/config";
 
@@ -73,7 +75,12 @@ export function fallbackPermissions(tenant: string, isAdmin: boolean): RbacPermi
   };
 }
 
+/** How long to wait for TenantProvider's own load before fetching ourselves. */
+const STORE_GRACE_MS = 1500;
+
 export function useRbacPermissions(tenant: string, isAdmin: boolean): State {
+  const fromStore = useSelector(selectRbacPermissions) as RbacPermissionMap;
+  const storeHasTenant = !!tenant && !!fromStore?.[`/platforms/${tenant}/`];
   const [state, setState] = useState<State>({ permissions: {}, ready: false });
   // Read at failure time, not as an effect dependency: isAdmin resolving
   // late must not restart the fetch.
@@ -81,31 +88,35 @@ export function useRbacPermissions(tenant: string, isAdmin: boolean): State {
   isAdminRef.current = isAdmin;
 
   useEffect(() => {
-    if (!tenant) return;
+    if (!tenant || storeHasTenant) return;
     const cached = readCache(tenant);
     if (cached) {
       setState({ permissions: cached, ready: true });
       return;
     }
     let cancelled = false;
-    let req = inflight.get(tenant);
-    if (!req) {
-      const token = localStorage.getItem("dm_token") ?? "";
-      req = fetchRbacPermissions(tenant, token).finally(() => inflight.delete(tenant));
-      inflight.set(tenant, req);
-    }
-    req
-      .then((permissions) => {
-        writeCache(tenant, permissions);
-        if (!cancelled) setState({ permissions, ready: true });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ permissions: fallbackPermissions(tenant, isAdminRef.current), ready: true });
-      });
+    const timer = setTimeout(() => {
+      let req = inflight.get(tenant);
+      if (!req) {
+        const token = localStorage.getItem("dm_token") ?? "";
+        req = fetchRbacPermissions(tenant, token).finally(() => inflight.delete(tenant));
+        inflight.set(tenant, req);
+      }
+      req
+        .then((permissions) => {
+          writeCache(tenant, permissions);
+          if (!cancelled) setState({ permissions, ready: true });
+        })
+        .catch(() => {
+          if (!cancelled) setState({ permissions: fallbackPermissions(tenant, isAdminRef.current), ready: true });
+        });
+    }, STORE_GRACE_MS);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [tenant]);
+  }, [tenant, storeHasTenant]);
 
+  if (storeHasTenant) return { permissions: fromStore, ready: true };
   return state;
 }

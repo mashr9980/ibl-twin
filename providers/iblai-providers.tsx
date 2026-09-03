@@ -27,7 +27,7 @@ import {
   initializeDataLayer,
   type TokenResponse,
 } from "@iblai/iblai-js/data-layer";
-import { AuthProvider, TenantProvider } from "@iblai/iblai-js/web-utils";
+import { AuthProvider, TenantProvider, updateRbacPermissions } from "@iblai/iblai-js/web-utils";
 
 import { iblaiStore } from "@/store/iblai-store";
 import { LocalStorageService } from "@/lib/iblai/storage-service";
@@ -116,6 +116,16 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
         fallback={LOADING}
       >
         <TenantProvider
+          // The action is typed for the mentor-scoped shape but its reducer
+          // spreads any map; the platform flags NotificationDisplay/Account
+          // read (`/platforms/<key>/` → can_*) are exactly what arrives here.
+          onLoadPlatformPermissions={(permissions) => {
+            if (permissions) {
+              iblaiStore.dispatch(
+                updateRbacPermissions(permissions as unknown as Parameters<typeof updateRbacPermissions>[0]),
+              );
+            }
+          }}
           skip={isSsoRoute}
           currentTenant={tenantKey}
           requestedTenant={tenantKey}

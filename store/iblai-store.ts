@@ -21,6 +21,7 @@ import {
 import {
   chatSliceReducerShared,
   filesReducer,
+  rbacReducer,
 } from "@iblai/iblai-js/web-utils";
 
 export const iblaiStore = configureStore({
@@ -36,6 +37,11 @@ export const iblaiStore = configureStore({
 
     // File upload state
     files: filesReducer,
+
+    // Tenant RBAC flags. TenantProvider fetches them on auth and hands them
+    // to onLoadPlatformPermissions; without this reducer they have nowhere
+    // to live and every vibe container falls back to "everyone is admin".
+    rbac: rbacReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({ serializableCheck: false })
