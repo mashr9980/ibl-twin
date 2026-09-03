@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Account } from "@iblai/iblai-js/web-containers/next";
 import config from "@/lib/iblai/config";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
+import { InviteDialog } from "@/components/twin/invite-dialog";
+import { useRbacPermissions } from "@/hooks/use-rbac-permissions";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -14,6 +16,8 @@ export default function AccountPage() {
   const [tenants, setTenants] = useState<any[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [ready, setReady] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const rbac = useRbacPermissions(tenantKey, isAdmin);
 
   useEffect(() => {
     try {
@@ -59,16 +63,21 @@ export default function AccountPage() {
           email={email}
           mainPlatformKey={config.mainTenantKey()}
           isAdmin={isAdmin}
+          enableRbac={rbac.ready}
+          rbacPermissions={rbac.permissions}
           authURL={config.authUrl()}
           currentPlatformBaseDomain={config.platformBaseDomain()}
           currentSPA="agent"
-          onInviteClick={() => {}}
+          // vibe raises this and leaves the flow to the host app; the starter
+          // and iblai/video both stub it, which is why Invite silently does nothing.
+          onInviteClick={() => setInviteOpen(true)}
           onClose={() => router.push("/")}
           targetTab="organization"
           showPlatformName={true}
           useGravatarPicFallback={true}
         />
       </div>
+      <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </div>
   );
 }

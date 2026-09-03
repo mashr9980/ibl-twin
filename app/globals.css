@@ -210,3 +210,20 @@ body {
 code, pre, kbd, samp {
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
+
+
+/* Alerts rows are `flex ... justify-between` with nowrap: a text column
+   (flex-1 min-w-0) beside a controls group pinned `flex-shrink-0`. At 390px
+   the controls hold 182px of the 274px row, so the text column is squeezed to
+   76px and the description wraps to eleven lines. min-w-0 is already set and
+   can't help — the controls are what won't yield. Let the row wrap instead so
+   the text gets full width and the toggle drops beneath it. */
+@media (max-width: 640px) {
+  [data-twin-notifications] .flex.items-start.justify-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  [data-twin-notifications] .flex.items-start.justify-between > .flex-1 {
+    flex-basis: 100%;
+  }
+}

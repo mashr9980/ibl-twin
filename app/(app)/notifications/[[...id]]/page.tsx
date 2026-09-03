@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { NotificationDisplay } from "@iblai/iblai-js/web-containers";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
+import { useRbacPermissions } from "@/hooks/use-rbac-permissions";
 
 export default function NotificationsPage() {
   const params = useParams();
@@ -14,6 +15,7 @@ export default function NotificationsPage() {
   const [username, setUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [ready, setReady] = useState(false);
+  const rbac = useRbacPermissions(tenantKey, isAdmin);
 
   useEffect(() => {
     try {
@@ -39,7 +41,7 @@ export default function NotificationsPage() {
     setReady(true);
   }, []);
 
-  if (!ready || !tenantKey) {
+  if (!ready || !tenantKey || !rbac.ready) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-gray-400">Loading notifications...</p>
@@ -48,12 +50,14 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="mx-auto w-full flex-1 overflow-auto px-4 py-8 md:w-[75vw] md:px-0">
+    <div data-twin-notifications className="mx-auto w-full flex-1 overflow-auto px-4 py-8 md:w-[75vw] md:px-0">
       <div className="rounded-lg border border-[var(--border-color)] bg-white overflow-hidden">
         <NotificationDisplay
           org={tenantKey}
           userId={username}
           isAdmin={isAdmin}
+          enableRbac
+          rbacPermissions={rbac.permissions}
           selectedNotificationId={notificationId}
         />
       </div>
