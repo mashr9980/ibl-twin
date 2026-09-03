@@ -30,6 +30,12 @@ platform returns credentials **masked** (`sk_***…`) to every caller including
 admins, so masked values are rejected (`lib/heygen/credential.ts`) and the UI
 shows an honest "integration required" gate instead of a 401.
 
+**Catalogue trim.** HeyGen's `GET /v2/avatars` is ~3.9 MB: 1,264 avatars plus
+~8,000 public talking photos nothing here renders. The proxy keeps the four
+fields the gallery reads, drops the rest (`?include=talking_photos` opts back
+in), and memoises the result per key for ten minutes. Cold: 272 KB instead of
+3.8 MB; warm: ~1.5 s.
+
 **RBAC gating is not `isAdmin`.** vibe's `NotificationDisplay` and `Account`
 gate admin surfaces with
 `checkRbacPermission(rbacPermissions, "/platforms/<key>/#can_send_notifications", enableRbac)`.
