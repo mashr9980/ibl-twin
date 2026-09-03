@@ -260,3 +260,39 @@ export async function getVideo(videoId: string): Promise<HeygenVideo> {
 export async function deleteVideo(videoId: string): Promise<void> {
   await request(`/v1/video.delete`, { query: { video_id: videoId }, method: "DELETE" });
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Image → video clip (/v3/videos, "image" variant)
+
+export interface CreateClipInput {
+  image_asset_id?: string;
+  image_url?: string;
+  motion_prompt?: string;
+  script?: string;
+  voice_id?: string;
+  aspect_ratio?: "16:9" | "9:16" | "1:1";
+  title?: string;
+}
+
+export async function createVideoClip(input: CreateClipInput): Promise<{ video_id: string }> {
+  return unwrap(
+    await request<{ data?: { video_id: string } } & Partial<{ video_id: string }>>("/v3/videos", {
+      method: "POST",
+      body: {
+        title: input.title,
+        aspect_ratio: input.aspect_ratio ?? "16:9",
+        video_inputs: [
+          {
+            character: input.image_asset_id
+              ? { type: "image", image_asset_id: input.image_asset_id }
+              : { type: "image", image_url: input.image_url },
+            ...(input.motion_prompt ? { motion_prompt: input.motion_prompt } : {}),
+            ...(input.script && input.voice_id
+              ? { voice: { type: "text", voice_id: input.voice_id, input_text: input.script } }
+              : {}),
+          },
+        ],
+      },
+    }),
+  );
+}
