@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import config from "@/lib/iblai/config";
 import { extractApiKey, isUsableKey } from "@/lib/heygen/credential";
+import { isAvatarCatalogue, trimAvatarCatalogue } from "@/lib/heygen/catalogue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,8 @@ const HEYGEN_API_BASE = "https://api.heygen.com";
 const HEYGEN_UPLOAD_BASE = "https://upload.heygen.com";
 const CREDENTIAL_TTL_MS = 60_000;
 
+const CATALOGUE_TTL_MS = 10 * 60 * 1000;
+const catalogueMemo = new Map<string, { body: unknown; expiresAt: number }>();
 const credentialCache = new Map<string, { apiKey: string; expiresAt: number }>();
 
 function upstreamBaseFor(path: string[]): string {
@@ -105,12 +108,29 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const method = req.method.toUpperCase();
   const body = method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
 
+  if (isAvatarCatalogue(method, path.join("/"))) {
+    const memo = catalogueMemo.get(apiKey);
+    if (memo && memo.expiresAt > Date.now()) {
+      return NextResponse.json(memo.body, { headers: { "Cache-Control": "private, max-age=300", "X-Twin-Cache": "hit" } });
+    }
+  }
+
   // HeyGen 503s intermittently — roughly one call in four on the catalogue
   // endpoint. One retry turns a visibly broken gallery into a slow one.
   let upstream = await fetch(target.toString(), { method, headers, body, cache: "no-store" });
   if (upstream.status >= 500 && (method === "GET" || method === "HEAD")) {
     await new Promise((r) => setTimeout(r, 600));
     upstream = await fetch(target.toString(), { method, headers, body, cache: "no-store" });
+  }
+
+  // The catalogue listing is ~3.9 MB raw for a handful of fields the gallery
+  // reads. Trim it here and remember it briefly per key so a cold visit
+  // doesn't wait on HeyGen's slowest endpoint.
+  const relPath = path.join("/");
+  if (upstream.ok && isAvatarCatalogue(method, relPath)) {
+    const slim = trimAvatarCatalogue(await upstream.json());
+    catalogueMemo.set(apiKey, { body: slim, expiresAt: Date.now() + CATALOGUE_TTL_MS });
+    return NextResponse.json(slim, { headers: { "Cache-Control": "private, max-age=300" } });
   }
 
   return new NextResponse(upstream.body, {
