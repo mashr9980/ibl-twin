@@ -22,6 +22,13 @@ const CHIPS: { key: Chip; label: string }[] = [
   { key: "clip", label: "Video Clips" },
 ];
 const POLL_MS = 5000;
+/**
+ * A render that has sat pending for hours is not coming back — this account
+ * has one stuck since 3,300 hours ago. Without a cutoff the poller chases it
+ * forever and the "+N generating" chip never clears. Twin applies the same
+ * three-hour rule.
+ */
+const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
 
 type Row = HeygenVideo & { kind: VideoKind; localTitle?: string };
 
@@ -32,6 +39,19 @@ function fmtDate(v: HeygenVideo["created_at"]): string {
 }
 
 const isDone = (s: string) => s === "completed" || s === "failed";
+
+function createdAtMs(v: HeygenVideo["created_at"]): number | null {
+  if (!v) return null;
+  const ms = typeof v === "number" ? (v < 1e12 ? v * 1000 : v) : Date.parse(v);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/** Pending, and old enough that it will never resolve. */
+function isStale(v: HeygenVideo): boolean {
+  if (isDone(v.status)) return false;
+  const ms = createdAtMs(v.created_at);
+  return ms !== null && Date.now() - ms > STALE_AFTER_MS;
+}
 
 function MyVideosInner() {
   const params = useSearchParams();
@@ -71,7 +91,7 @@ function MyVideosInner() {
 
   // Poll only the rows still rendering; stop touching the ones that resolved.
   useEffect(() => {
-    const pending = rows.filter((r) => !isDone(r.status));
+    const pending = rows.filter((r) => !isDone(r.status) && !isStale(r));
     if (!pending.length) return;
     const t = setInterval(async () => {
       const fresh = await Promise.all(pending.map((r) => getVideo(r.id).catch(() => null)));
@@ -84,7 +104,7 @@ function MyVideosInner() {
   }, [rows]);
 
   const visible = useMemo(() => (chip === "all" ? rows : rows.filter((r) => r.kind === chip)), [rows, chip]);
-  const generating = rows.filter((r) => !isDone(r.status)).length;
+  const generating = rows.filter((r) => !isDone(r.status) && !isStale(r)).length;
 
   async function remove(row: Row) {
     if (!confirm("Delete this video?")) return;
@@ -150,8 +170,14 @@ function MyVideosInner() {
                         {done ? (
                           <div className="absolute inset-0 hidden items-center justify-center bg-black/45 group-hover:flex"><span className="flex items-center gap-1.5 text-[13px] font-medium text-white"><Play size={14} /> Click to Play</span></div>
                         ) : (
-                          <span className={cn("absolute left-2 top-2 rounded-[var(--radius-pill)] px-2 py-0.5 text-[11px] font-medium text-white", v.status === "failed" ? "bg-red-500" : "bg-[var(--brand)]")}>
-                            {v.status === "failed" ? "Failed" : "Generating…"}
+                          <span
+                            title={isStale(v) ? "This render has been pending for hours and is unlikely to finish." : undefined}
+                            className={cn(
+                              "absolute left-2 top-2 rounded-[var(--radius-pill)] px-2 py-0.5 text-[11px] font-medium text-white",
+                              v.status === "failed" ? "bg-red-500" : isStale(v) ? "bg-[var(--content-caption)]" : "bg-[var(--brand)]",
+                            )}
+                          >
+                            {v.status === "failed" ? "Failed" : isStale(v) ? "Stalled" : "Generating…"}
                           </span>
                         )}
                       </div>

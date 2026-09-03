@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "help & faq | memorare twin" };
+export const metadata = { title: "help & faq" };
 
 /**
  * Questions mirror twin.memorare.ai's eight groups. Answers are written for

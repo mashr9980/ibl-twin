@@ -44,6 +44,10 @@ const reactReduxDir = dedup("react-redux");
 if (reactReduxDir) resolveAliases["react-redux"] = reactReduxDir;
 
 const nextConfig: NextConfig = {
+  // The ibl SDK logs the raw JWT and the entire localStorage — three tokens
+  // plus the user's email — on every page load. Harmless in dev, a session
+  // disclosure in production. Keep error/warn so real failures still surface.
+  compiler: { removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false },
   /* config options here */
   images: {
     remotePatterns: [{ protocol: "https", hostname: "**" }],

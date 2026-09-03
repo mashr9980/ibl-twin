@@ -171,10 +171,14 @@
   @apply text-blue-400 hover:text-blue-300;
 }
 
+/* The starter hard-coded the OS font stack here with !important, which beat
+   the Geist variable from next/font: the app rendered in the system font and
+   Geist never even loaded (FontFace status stayed "unloaded"). Keep the
+   !important so the rule still wins, but lead with the real font. */
 body {
   font-family:
-    ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-    'Noto Color Emoji' !important;
+    var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji' !important;
 }
 
 /* Safe area insets for mobile status bar / notch / home indicator */

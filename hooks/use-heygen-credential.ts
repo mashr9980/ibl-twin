@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import config from "@/lib/iblai/config";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 
 export type HeygenCredentialState = "checking" | "ok" | "missing";
@@ -18,21 +17,17 @@ function probe(): Promise<HeygenCredentialState> {
     const tenant = resolveAppTenant();
     if (!token || !tenant) return "missing";
 
+    // Ask our own server, not the platform: the platform reports a masked
+    // credential as present, which would unlock the UI for calls that then
+    // fail upstream with an opaque 401.
     try {
-      const res = await fetch(
-        `${config.dmUrl()}/api/ai-account/orgs/${encodeURIComponent(tenant)}` +
-          `/integration-credential/?name=heygen`,
-        { headers: { Authorization: `Token ${token}`, Accept: "application/json" } },
-      );
+      const res = await fetch("/api/heygen/status", {
+        headers: { Authorization: `Token ${token}`, "X-Platform": tenant },
+        cache: "no-store",
+      });
       if (!res.ok) return "missing";
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : data?.results ?? [];
-      const present = list.some(
-        (e: { name?: string; value?: { key?: string } }) =>
-          e && (e.name === "heygen" || e.name === "heygen-private") &&
-          typeof e.value?.key === "string" && e.value.key.length > 0,
-      );
-      return present ? "ok" : "missing";
+      const data = (await res.json()) as { ok?: boolean };
+      return data.ok ? "ok" : "missing";
     } catch {
       return "missing";
     }

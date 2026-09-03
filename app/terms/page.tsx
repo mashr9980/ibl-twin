@@ -1,6 +1,6 @@
 import { LegalPage } from "@/lib/twin/legal";
 
-export const metadata = { title: "terms & conditions | memorare twin" };
+export const metadata = { title: "terms & conditions" };
 
 export default function TermsPage() {
   return (

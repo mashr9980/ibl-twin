@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "vibe-starter",
-  description: "Built on the ibl.ai platform",
+  title: { default: "memorare twin", template: "%s | memorare twin" },
+  description: "Create AI avatar videos: pick or create an avatar, choose a voice, write a script.",
 };
 
 export const viewport: Viewport = {

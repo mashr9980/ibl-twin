@@ -15,6 +15,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
 
+  // Escape closes the drawer, matching the modal and the profile menu.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("userData");

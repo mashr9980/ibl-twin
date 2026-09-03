@@ -52,3 +52,18 @@ export function extractApiKey(node: unknown, depth = 0): string | null {
 
   return null;
 }
+
+/**
+ * The platform returns sensitive fields masked ("sk_****…WJ") to every caller,
+ * admins included. Forwarding a masked string upstream produces a bare 401
+ * from the provider that looks nothing like its real cause, so detect it and
+ * treat the credential as unusable rather than "present".
+ */
+export function looksMasked(key: string): boolean {
+  return /\*{3,}|•{3,}|…/.test(key);
+}
+
+/** A usable key: present, unmasked, and long enough to be real. */
+export function isUsableKey(key: string | null | undefined): key is string {
+  return typeof key === "string" && key.trim().length >= 16 && !looksMasked(key);
+}

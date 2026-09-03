@@ -14,7 +14,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import config from "@/lib/iblai/config";
-import { extractApiKey } from "@/lib/heygen/credential";
+import { extractApiKey, isUsableKey } from "@/lib/heygen/credential";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +30,22 @@ function upstreamBaseFor(path: string[]): string {
   return path[0] === "v1" && path[1] === "asset" ? HEYGEN_UPLOAD_BASE : HEYGEN_API_BASE;
 }
 
-async function resolveHeygenKey(tenant: string, dmToken: string): Promise<string> {
+/**
+ * Resolve the provider key, server-side only.
+ *
+ *   1. HEYGEN_API_KEY from the server environment.
+ *   2. The tenant's ai-account integration credential.
+ *
+ * The tenant store is the architecturally correct home for this, and is tried
+ * whenever the env var is absent. In practice it returns the key masked to
+ * every caller — including platform admins — so the env var is what actually
+ * works today. Either way the key stays on the server: the browser only ever
+ * presents its own ibl.ai token.
+ */
+export async function resolveHeygenKey(tenant: string, dmToken: string): Promise<string> {
+  const fromEnv = process.env.HEYGEN_API_KEY?.trim();
+  if (isUsableKey(fromEnv)) return fromEnv;
+
   const cacheKey = `${tenant}:${dmToken}`;
   const hit = credentialCache.get(cacheKey);
   if (hit && hit.expiresAt > Date.now()) return hit.apiKey;
@@ -47,6 +62,7 @@ async function resolveHeygenKey(tenant: string, dmToken: string): Promise<string
   }
   const apiKey = extractApiKey(await res.json());
   if (!apiKey) throw new Error("no_heygen_credential");
+  if (!isUsableKey(apiKey)) throw new Error("masked_heygen_credential");
 
   credentialCache.set(cacheKey, { apiKey, expiresAt: Date.now() + CREDENTIAL_TTL_MS });
   return apiKey;
@@ -66,8 +82,9 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   try {
     apiKey = await resolveHeygenKey(tenant, dmToken);
   } catch (err) {
-    const missing = err instanceof Error && err.message === "no_heygen_credential";
-    console.error("[api/heygen] credential lookup failed:", err);
+    const msg = err instanceof Error ? err.message : "";
+    const missing = msg === "no_heygen_credential" || msg === "masked_heygen_credential";
+    console.error("[api/heygen] credential lookup failed:", msg || err);
     // 424 mirrors iblai/video: the tenant simply has no HeyGen key yet.
     return NextResponse.json(
       { error: missing ? "heygen_credential_missing" : "credential_lookup_failed" },
@@ -88,7 +105,13 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const method = req.method.toUpperCase();
   const body = method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
 
-  const upstream = await fetch(target.toString(), { method, headers, body, cache: "no-store" });
+  // HeyGen 503s intermittently — roughly one call in four on the catalogue
+  // endpoint. One retry turns a visibly broken gallery into a slow one.
+  let upstream = await fetch(target.toString(), { method, headers, body, cache: "no-store" });
+  if (upstream.status >= 500 && (method === "GET" || method === "HEAD")) {
+    await new Promise((r) => setTimeout(r, 600));
+    upstream = await fetch(target.toString(), { method, headers, body, cache: "no-store" });
+  }
 
   return new NextResponse(upstream.body, {
     status: upstream.status,

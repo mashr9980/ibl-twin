@@ -48,3 +48,35 @@ describe("extractApiKey", () => {
     expect(extractApiKey(deep)).toBeNull();
   });
 });
+
+import { isUsableKey, looksMasked } from "@/lib/heygen/credential";
+
+/**
+ * The platform masks sensitive fields for every caller, admins included.
+ * Forwarding a masked string upstream yields a bare 401 that looks nothing
+ * like its cause, so these guard the detection directly.
+ */
+describe("masked credential detection", () => {
+  const REAL = ["sk", "test", "x".repeat(40)].join("_"); // synthetic, not a real prefix
+  const MASKED = "sk_" + "*".repeat(49) + "WJ";
+
+  it("spots the platform's masking format", () => {
+    expect(looksMasked(MASKED)).toBe(true);
+    expect(looksMasked("sk-****")).toBe(true);
+    expect(looksMasked("abc…xyz")).toBe(true);
+  });
+
+  it("does not flag a real key", () => {
+    expect(looksMasked(REAL)).toBe(false);
+  });
+
+  it("accepts only keys that are real, present and long enough", () => {
+    expect(isUsableKey(REAL)).toBe(true);
+    expect(isUsableKey(MASKED)).toBe(false);
+    expect(isUsableKey("")).toBe(false);
+    expect(isUsableKey("   ")).toBe(false);
+    expect(isUsableKey("short")).toBe(false);
+    expect(isUsableKey(null)).toBe(false);
+    expect(isUsableKey(undefined)).toBe(false);
+  });
+});

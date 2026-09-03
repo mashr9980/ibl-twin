@@ -6,6 +6,7 @@ import { LayoutGrid, List, Search, UserRound } from "lucide-react";
 
 import {
   HeygenCredentialMissingError,
+  invalidateAvatarCatalogue,
   listHeygenAvatars,
   type HeygenAvatar,
 } from "@/lib/heygen/rest";
@@ -19,6 +20,9 @@ const CHIPS: { key: Category; label: string }[] = [
   { key: "MODERN", label: "Educational" },
   { key: "HISTORY", label: "Historical" },
 ];
+
+/** 1,264 cards is ~10k DOM nodes. Render a page at a time. */
+const PAGE = 60;
 
 /**
  * HeyGen's stock catalogue is modern presenters, which is exactly what twin
@@ -108,6 +112,8 @@ export function AvatarGallery({
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [category, setCategory] = useState<Category>("ALL");
+  const [shown, setShown] = useState(PAGE);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const c = params.get("category");
@@ -123,18 +129,40 @@ export function AvatarGallery({
     setLoading(true);
     listHeygenAvatars()
       .then(({ avatars }) => !cancelled && (setAvatars(avatars), setError(null)))
-      .catch((err) => !cancelled && setError(err instanceof HeygenCredentialMissingError ? "gate" : "Couldn't load avatars. Please try again."))
+      .catch((err) => !cancelled && setError(err instanceof HeygenCredentialMissingError ? "gate" : "load"))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [credential]);
+  }, [credential, reloadKey]);
 
-  const visible = useMemo(() => {
+  // A new search or chip starts from the first page again.
+  useEffect(() => setShown(PAGE), [query, category]);
+
+  function retry() {
+    invalidateAvatarCatalogue();
+    setError(null);
+    setReloadKey((k) => k + 1);
+  }
+
+  /** Counts per chip, so an empty category reads as empty rather than broken. */
+  const counts = useMemo(() => ({
+    ALL: avatars.length,
+    MODERN: avatars.filter((a) => categoryOf(a) === "MODERN").length,
+    HISTORY: avatars.filter((a) => categoryOf(a) === "HISTORY").length,
+  }), [avatars]);
+
+  const matching = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = avatars.filter((a) => (category === "ALL" || categoryOf(a) === category) && (!q || (a.avatar_name ?? "").toLowerCase().includes(q)));
-    return limit ? list.slice(0, limit) : list;
-  }, [avatars, query, category, limit]);
+    return avatars.filter(
+      (a) => (category === "ALL" || categoryOf(a) === category) && (!q || (a.avatar_name ?? "").toLowerCase().includes(q)),
+    );
+  }, [avatars, query, category]);
+
+  const visible = useMemo(
+    () => (limit ? matching.slice(0, limit) : matching.slice(0, shown)),
+    [matching, limit, shown],
+  );
 
   if (credential === "missing" || error === "gate") return <HeygenGate />;
 
@@ -172,16 +200,25 @@ export function AvatarGallery({
       <div className="mb-6 flex flex-wrap gap-2">
         {CHIPS.map((chip) => (
           <button key={chip.key} type="button" onClick={() => setCategory(chip.key)} aria-pressed={category === chip.key}
-            className={cn("h-8 rounded-[var(--radius-pill)] border px-3.5 text-[13px] transition-colors",
+            className={cn("flex h-8 items-center gap-1.5 rounded-[var(--radius-pill)] border px-3.5 text-[13px] transition-colors",
               category === chip.key ? "border-transparent bg-[var(--composer-chip)] font-medium text-[var(--brand)]" : "border-[var(--border)] bg-[var(--card)] text-[var(--content-title)] hover:bg-[var(--canvas-muted)]")}>
             {chip.label}
+            {!loading && (
+              <span className="tabular-nums text-[11.5px] text-[var(--content-caption)]">{counts[chip.key]}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {error && error !== "gate" && <p role="alert" className="mb-4 text-[13.5px] text-red-600">{error}</p>}
-
-      {loading ? (
+      {error === "load" ? (
+        <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] p-10 text-center">
+          <p role="alert" className="text-[14px] font-medium text-[var(--content-title)]">Couldn&apos;t load the avatar catalogue</p>
+          <p className="mx-auto mt-1.5 max-w-sm text-[13px] text-[var(--content-caption)]">
+            The provider returns an error intermittently on this endpoint. Trying again usually works.
+          </p>
+          <button type="button" onClick={retry} className="twin-gradient mt-4 h-9 px-4 text-[13px] font-semibold">Try again</button>
+        </div>
+      ) : loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
           {Array.from({ length: limit ?? 12 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -216,8 +253,18 @@ export function AvatarGallery({
         </ul>
       )}
 
-      {!loading && visible.length > 0 && !limit && (
-        <p className="mt-6 text-[12.5px] text-[var(--content-caption)]">{visible.length} avatar{visible.length === 1 ? "" : "s"}</p>
+      {!loading && !error && matching.length > 0 && !limit && (
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <p className="text-[12.5px] text-[var(--content-caption)]">
+            Showing {visible.length} of {matching.length} avatar{matching.length === 1 ? "" : "s"}
+          </p>
+          {visible.length < matching.length && (
+            <button type="button" onClick={() => setShown((n) => n + PAGE)}
+              className="h-9 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--card)] px-5 text-[13px] font-medium text-[var(--content-title)] transition-colors hover:bg-[var(--canvas-muted)]">
+              Load more
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

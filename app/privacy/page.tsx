@@ -1,6 +1,6 @@
 import { LegalPage } from "@/lib/twin/legal";
 
-export const metadata = { title: "privacy policy | memorare twin" };
+export const metadata = { title: "privacy policy" };
 
 export default function PrivacyPage() {
   return (

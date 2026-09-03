@@ -59,9 +59,10 @@ test.describe("authenticated shell", () => {
     await expect.poll(async () => (await aside.boundingBox())!.width).toBeGreaterThan(200);
   });
 
-  test("gallery gates honestly while the tenant has no HeyGen credential", async ({ page }) => {
+  test("the gallery renders the real catalogue for a credentialed tenant", async ({ page }) => {
     await page.goto("/ai-avatar/my");
-    await expect(page.getByText("HeyGen integration required")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Choose an Avatar, add or select a Voice")).toBeVisible();
+    await expect(page.getByText("Choose an Avatar, add or select a Voice")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("HeyGen integration required")).toHaveCount(0);
+    await expect(page.locator("img[alt$='avatar preview']").first()).toBeVisible({ timeout: 60_000 });
   });
 });

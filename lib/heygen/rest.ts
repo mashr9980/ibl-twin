@@ -71,15 +71,37 @@ export interface HeygenTalkingPhoto {
   preview_image_url?: string | null;
 }
 
-/** GET /v2/avatars — the stock catalogue plus this account's talking photos. */
-export async function listHeygenAvatars(): Promise<{
+export interface AvatarCatalogue {
   avatars: HeygenAvatar[];
   talkingPhotos: HeygenTalkingPhoto[];
-}> {
-  const data = unwrap<{ avatars?: HeygenAvatar[]; talking_photos?: HeygenTalkingPhoto[] }>(
-    await request("/v2/avatars"),
-  );
-  return { avatars: data.avatars ?? [], talkingPhotos: data.talking_photos ?? [] };
+}
+
+/**
+ * The catalogue is ~3.9 MB and takes >10s upstream, and it does not change
+ * between screens. Fetch it once per session and share the in-flight promise,
+ * so moving Gallery → picker → Create Twin costs nothing instead of a fresh
+ * 12-second download each time.
+ */
+let cataloguePromise: Promise<AvatarCatalogue> | null = null;
+
+/** GET /v2/avatars — the stock catalogue plus this account's talking photos. */
+export function listHeygenAvatars(): Promise<AvatarCatalogue> {
+  if (cataloguePromise) return cataloguePromise;
+  cataloguePromise = (async () => {
+    const data = unwrap<{ avatars?: HeygenAvatar[]; talking_photos?: HeygenTalkingPhoto[] }>(
+      await request("/v2/avatars"),
+    );
+    return { avatars: data.avatars ?? [], talkingPhotos: data.talking_photos ?? [] };
+  })().catch((err) => {
+    cataloguePromise = null; // a failure must not be cached
+    throw err;
+  });
+  return cataloguePromise;
+}
+
+/** Drop the cached catalogue so the next call refetches (used by Retry). */
+export function invalidateAvatarCatalogue(): void {
+  cataloguePromise = null;
 }
 
 export interface HeygenVoice {
