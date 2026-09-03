@@ -1,0 +1,18 @@
+# Memorare Twin replica — Next.js on loopback; nginx is the only public entry.
+[Unit]
+Description=ibl-twin (Memorare Twin replica on ibl.ai)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/ibl-twin
+EnvironmentFile=/opt/ibl-twin/.env.local
+Environment=NODE_ENV=production
+Environment=PORT=3100
+ExecStart=/usr/bin/npx next start -H 127.0.0.1 -p 3100
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
