@@ -31,7 +31,7 @@ test.describe("link integrity", () => {
         await page.getByRole("heading", { name: "Frequently Asked Questions" }).waitFor({ timeout: 30_000 });
       } else {
         await page.locator("footer").waitFor({ timeout: 30_000 });
-        if (isMobile) await page.getByRole("button", { name: "Open menu" }).click().catch(() => {});
+        if (isMobile) await page.getByRole("button", { name: "Open sidebar" }).click().catch(() => {});
         await page.getByRole("navigation", { name: "Main" }).waitFor({ timeout: 30_000 });
       }
       for (const href of await page.locator("a[href^='/']").evaluateAll((els) => els.map((e) => e.getAttribute("href")!))) {

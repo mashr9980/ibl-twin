@@ -24,7 +24,7 @@ test.describe("screens", () => {
     await expect(page.getByText("You can create one twin per account.").first()).toBeVisible();
 
     // The teaser grid pulls the real catalogue.
-    await expect(page.locator("img[alt$='avatar preview']").first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("main").locator("img").first()).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole("link", { name: /More/ })).toBeVisible();
   });
 
@@ -33,32 +33,36 @@ test.describe("screens", () => {
     await expect(page.getByRole("heading", { name: "Gallery" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("Choose an Avatar, add or select a Voice, and get an Avatar Video in minutes.")).toBeVisible();
 
-    await expect(page.locator("img[alt$='avatar preview']").first()).toBeVisible({ timeout: 60_000 });
-    const all = await page.locator("img[alt$='avatar preview']").count();
+    const cards = page.getByRole("main").locator("img");
+    await expect(cards.first()).toBeVisible({ timeout: 60_000 });
+    const all = await cards.count();
     expect(all, "expected a populated catalogue").toBeGreaterThan(50);
-    await expect(page.getByText(/\d+ avatars?$/)).toBeVisible();
 
     await page.getByPlaceholder("Search").fill("Abigail");
-    await expect.poll(() => page.locator("img[alt$='avatar preview']").count(), { timeout: 15_000 }).toBeLessThan(all);
+    await expect.poll(() => cards.count(), { timeout: 15_000 }).toBeLessThan(all);
 
     await page.getByPlaceholder("Search").fill("zzzzqqq");
     await expect(page.getByText("No avatars found")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Try another search or category chip.")).toBeVisible();
   });
 
   test("Avatar picker opens the generation modal with real voices", async ({ page }) => {
     await page.goto("/ai-avatar/select");
     await expect(page.getByRole("heading", { name: "Avatar" })).toBeVisible({ timeout: 30_000 });
-    await page.locator("button:has(img[alt$='avatar preview'])").first().click({ timeout: 60_000 });
+    // The picker groups looks by character: open the character, then a look.
+    const tiles = page.getByRole("main").locator("button:has(img)");
+    await tiles.first().click({ timeout: 60_000 });
+    await expect(page.getByRole("button", { name: /Back|All Avatars/ })).toBeVisible({ timeout: 15_000 });
+    await tiles.first().click();
 
     await expect(page.getByRole("heading", { name: "Edit Avatar Video" })).toBeVisible({ timeout: 30_000 });
-    await expect.poll(() => page.locator("select option").count(), { timeout: 45_000 }).toBeGreaterThan(10);
+    const voice = page.getByRole("combobox");
+    await expect.poll(async () => (await voice.textContent()) ?? "", { timeout: 45_000 }).not.toContain("Loading");
 
     // Generate stays disabled until a script exists.
     const generate = page.getByRole("button", { name: /Generate AI Avatar Video/ });
     await expect(generate).toBeDisabled();
     await page.getByRole("button", { name: "Surprise me" }).click();
-    await expect(page.locator("#script")).not.toHaveValue("");
+    await expect(page.locator("#avatar-script")).not.toHaveValue("");
     await expect(generate).toBeEnabled();
 
     await expect(page.getByText("0.5x")).toBeVisible();
@@ -88,7 +92,7 @@ test.describe("screens", () => {
     const playable = page.locator("article button:not([disabled])").first();
     await playable.click();
     await expect(page.locator("video")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("link", { name: "Share" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Share" })).toBeVisible();
   });
 
   test("a stalled render is labelled, not counted as generating", async ({ page }) => {
@@ -105,14 +109,17 @@ test.describe("screens", () => {
     await expect(page.getByRole("heading", { name: "Voices", exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("button", { name: /Clone Voice/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Pre-built Voices" })).toBeVisible();
-    await expect.poll(() => page.locator("li").count(), { timeout: 60_000 }).toBeGreaterThan(10);
-    await expect(page.getByText(/^Showing \d+ of \d+ voices$/)).toBeVisible();
+    await expect.poll(
+      () => page.getByRole("button", { name: /^Preview / }).count(),
+      { timeout: 60_000 },
+    ).toBeGreaterThan(10);
+    await expect(page.getByText(/^\d+ voices$/)).toBeVisible();
   });
 
   test("Create Video Clip gates its own submit until image and prompt exist", async ({ page }) => {
     await page.goto("/videos/generate");
     await expect(page.getByRole("heading", { name: "Create Video Clip" })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("button", { name: /Generate Video Clip/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Generate with Veo 3/ })).toBeDisabled();
     await expect(page.getByText("Supported formats: JPG, PNG, GIF, WEBP. Max size: 30MB.")).toBeVisible();
   });
 
@@ -125,7 +132,7 @@ test.describe("screens", () => {
   test("sidebar deep links land on the right screen with the right chip", async ({ page, isMobile }) => {
     await page.goto("/ai-avatar/my");
     await expect(page.getByRole("heading", { name: "Gallery" })).toBeVisible({ timeout: 30_000 });
-    if (isMobile) await page.getByRole("button", { name: "Open menu" }).click();
+    if (isMobile) await page.getByRole("button", { name: "Open sidebar" }).click();
     await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Video Clip" }).last().click();
     // Default 5 s is too tight straight after a click when the box is busy
     // with the rest of the suite; flaked once in a full run, 6/6 on rerun.

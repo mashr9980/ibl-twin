@@ -18,7 +18,7 @@ test.describe("authenticated shell", () => {
 
     if (isMobile) {
       await expect(page.locator("aside")).toBeHidden();
-      await page.getByRole("button", { name: "Open menu" }).click();
+      await page.getByRole("button", { name: "Open sidebar" }).click();
     } else {
       await expect(page.locator("aside")).toBeVisible();
     }
@@ -35,7 +35,7 @@ test.describe("authenticated shell", () => {
   test("profile menu opens with the signed-in email and all five actions", async ({ page, isMobile }) => {
     await page.goto("/ai-avatar/my");
     await expect(page.getByRole("heading", { name: "Gallery" })).toBeVisible({ timeout: 20_000 });
-    if (isMobile) await page.getByRole("button", { name: "Open menu" }).click();
+    if (isMobile) await page.getByRole("button", { name: "Open sidebar" }).click();
 
     await page.getByRole("button", { name: /mashr9980/ }).first().click();
     const menu = page.getByRole("menu");
@@ -63,6 +63,6 @@ test.describe("authenticated shell", () => {
     await page.goto("/ai-avatar/my");
     await expect(page.getByText("Choose an Avatar, add or select a Voice")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("HeyGen integration required")).toHaveCount(0);
-    await expect(page.locator("img[alt$='avatar preview']").first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("main").locator("img").first()).toBeVisible({ timeout: 60_000 });
   });
 });
