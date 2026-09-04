@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
+import { Alert } from "@/components/twin/alert";
 import config from "@/lib/iblai/config";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 
@@ -113,10 +114,7 @@ export function InviteDialog({ open, onClose }: { open: boolean; onClose: () => 
           />
 
           {state.message && (
-            <p role={state.kind === "error" ? "alert" : "status"}
-              className={`mt-2 text-[13px] ${state.kind === "error" ? "text-red-600" : "text-green-700"}`}>
-              {state.message}
-            </p>
+            <Alert className="mt-2">{state.message}</Alert>
           )}
 
           <div className="mt-4 flex justify-end gap-2">

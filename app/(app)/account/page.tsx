@@ -55,7 +55,7 @@ export default function AccountPage() {
 
   return (
     <div className="mx-auto w-full flex-1 overflow-auto px-4 py-8 md:w-[75vw] md:px-0">
-      <div className="rounded-lg border border-[var(--border-color)] bg-white overflow-hidden">
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden">
         <Account
           tenant={tenantKey}
           tenants={tenants}
