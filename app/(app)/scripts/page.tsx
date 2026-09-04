@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mic, Play, Search, Square } from "lucide-react";
+import { MoreHorizontal, Play, Search, Square, Waves } from "lucide-react";
 
 import { HeygenGate } from "@/components/twin/avatar-gallery";
+import { cn } from "@/lib/utils";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
 import { listHeygenVoices, type HeygenVoice } from "@/lib/heygen/rest";
 
@@ -42,59 +43,155 @@ export default function VoicesPage() {
     setPlaying(v.voice_id);
   }
 
+  /**
+   * Twin tints each voice swatch, so a long list still scans. HeyGen gives no
+   * colour, so derive one from the voice id: stable per voice, no state.
+   */
+  const swatch = (id: string) => {
+    const palette = [
+      "from-blue-300 to-sky-600",
+      "from-sky-300 to-sky-600",
+      "from-indigo-300 to-indigo-600",
+      "from-violet-300 to-violet-600",
+      "from-cyan-300 to-cyan-600",
+      "from-teal-300 to-teal-600",
+    ];
+    let sum = 0;
+    for (const ch of id) sum = (sum + ch.charCodeAt(0)) % 997;
+    return palette[sum % palette.length];
+  };
+
+  /** Twin shows a flag beside the accent; map the languages HeyGen returns. */
+  const FLAGS: Record<string, string> = {
+    english: "🇺🇸", spanish: "🇪🇸", french: "🇫🇷", german: "🇩🇪", italian: "🇮🇹",
+    portuguese: "🇵🇹", japanese: "🇯🇵", korean: "🇰🇷", chinese: "🇨🇳", hindi: "🇮🇳",
+    arabic: "🇸🇦", dutch: "🇳🇱", polish: "🇵🇱", russian: "🇷🇺", turkish: "🇹🇷",
+  };
+  const flagOf = (lang?: string | null) => FLAGS[(lang ?? "").toLowerCase()] ?? "🌐";
+
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-7 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-[24px] font-semibold tracking-[-0.6px] text-[var(--content-title)]">Voices</h1>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <label className="relative"><span className="sr-only">Search voices</span>
-            <Search size={16} strokeWidth={1.75} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--content-caption)]" />
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search voices" className="h-9 w-full rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--card)] pl-9 pr-3 text-[13.5px] outline-none focus:border-[var(--brand)] sm:w-[240px]" />
-          </label>
-          <button type="button" disabled title="Coming soon" className="twin-gradient flex h-9 items-center justify-center gap-1.5 px-4 text-[13px] font-semibold"><Mic size={14} /> Clone Voice</button>
+    <div className="flex min-h-full w-full min-w-0 max-w-full flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+      <header className="mb-5 flex shrink-0 flex-col gap-3 sm:mb-8 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+        <h1 className="text-lg font-semibold tracking-tight text-[var(--content-title)] sm:text-xl md:text-2xl">Voices</h1>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+          <div className="relative w-full sm:w-[280px]">
+            <Search size={16} strokeWidth={1.75} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search voices"
+              aria-label="Search voices"
+              className="flex h-9 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-9 pr-3 text-base leading-snug text-[var(--content-title)] shadow-sm outline-none placeholder:text-[11px] placeholder:text-[var(--muted-foreground)] focus-visible:border-[var(--brand)] sm:text-[13px] sm:placeholder:text-[13px]"
+            />
+          </div>
+          <button
+            type="button"
+            disabled
+            title="Voice cloning isn't available in this build"
+            className="inline-flex h-8 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border-0 bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] px-3 py-2 text-xs font-medium text-white shadow-none transition-all hover:brightness-[0.96] disabled:pointer-events-none disabled:opacity-50 sm:h-9 sm:w-auto sm:px-4 sm:text-[13px]"
+          >
+            <Waves className="size-4" strokeWidth={1.75} aria-hidden />
+            Clone Voice
+          </button>
         </div>
       </header>
 
-      {credential === "missing" ? <HeygenGate /> : (
+      {credential === "missing" ? (
+        <HeygenGate />
+      ) : (
         <>
-          <section className="mb-8 rounded-[var(--radius-card)] border border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-center">
-            <Mic size={24} strokeWidth={1.5} className="mx-auto mb-2 text-[var(--content-caption)]" />
-            <p className="text-[14px] font-medium text-[var(--content-title)]">My Voices</p>
-            <p className="mt-1 text-[13px] text-[var(--content-caption)]">No voices yet — clone one or add from pre-built below.</p>
+          <section className="mb-10">
+            <h2 className="mb-4 text-sm font-semibold text-[var(--content-title)] sm:text-base">My Voices</h2>
+            <div className="flex min-h-[180px] flex-col items-center justify-center rounded-[9px] border border-dashed border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] dark:bg-[color-mix(in_oklab,var(--muted)_25%,transparent)] px-4 py-10 sm:min-h-[200px] sm:px-6 sm:py-12">
+              <Waves size={32} strokeWidth={1.25} className="mb-3 text-[var(--muted-foreground)]" />
+              <p className="mb-5 max-w-md text-center text-[10px] leading-snug text-[var(--content-caption)] sm:text-[11px]">
+                No voices yet — clone one or add from pre-built below
+              </p>
+              <button
+                type="button"
+                disabled
+                title="Voice cloning isn't available in this build"
+                className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-xs font-normal text-[var(--content-title)] shadow-sm transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-50 sm:text-[13px]"
+              >
+                <Waves className="size-4" strokeWidth={1.75} aria-hidden />
+                Clone your voice
+              </button>
+            </div>
           </section>
 
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[16px] font-semibold text-[var(--content-title)]">Pre-built Voices</h2>
-            <span className="text-[12.5px] text-[var(--content-caption)]">{loading ? "…" : `${matching.length} voices`}</span>
-          </div>
-          <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)]">
-            {loading && Array.from({ length: 6 }).map((_, i) => <li key={i} className="h-14 animate-pulse bg-[var(--canvas-muted)]" />)}
-            {!loading && visible.map((v) => (
-              <li key={v.voice_id} className="flex items-center gap-3 px-3 py-2.5">
-                <button type="button" onClick={() => toggle(v)} disabled={!v.preview_audio} aria-label={playing === v.voice_id ? "Stop" : "Play"} className="twin-gradient flex h-9 w-9 flex-none items-center justify-center rounded-[var(--radius-control)] disabled:opacity-40">
-                  {playing === v.voice_id ? <Square size={13} /> : <Play size={13} />}
-                </button>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13.5px] font-medium text-[var(--content-title)]">{v.name}</span>
-                  <span className="block truncate text-[12px] text-[var(--content-caption)]">{[v.language, v.gender].filter(Boolean).join(" · ")}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <section>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h2 className="text-sm font-semibold text-[var(--content-title)] sm:text-base">Pre-built Voices</h2>
+              <span className="inline-flex items-center gap-2 text-xs leading-snug text-[var(--content-title)] sm:text-[13px]">
+                {loading ? "…" : `${matching.length} voices`}
+              </span>
+            </div>
 
-          {!loading && matching.length > 0 && (
-            <div className="mt-6 flex flex-col items-center gap-3">
-              <p className="text-[12.5px] text-[var(--content-caption)]">
-                Showing {visible.length} of {matching.length} voice{matching.length === 1 ? "" : "s"}
-              </p>
-              {visible.length < matching.length && (
-                <button type="button" onClick={() => setShown((n) => n + PAGE)}
-                  className="h-9 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--card)] px-5 text-[13px] font-medium text-[var(--content-title)] transition-colors hover:bg-[var(--canvas-muted)]">
+            <div className="rounded-[9px] border border-[var(--border)] bg-[var(--card)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+              {loading &&
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-[76px] animate-pulse border-b border-[var(--border)] last:border-b-0 bg-[var(--canvas-muted)]" />
+                ))}
+
+              {!loading &&
+                visible.map((v) => (
+                  <div key={v.voice_id} className="flex flex-col gap-3 border-b border-[var(--border)] px-3 py-4 last:border-b-0 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Preview ${v.name ?? "voice"}`}
+                      onClick={() => toggle(v)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(v); } }}
+                      className="flex min-w-0 flex-1 cursor-pointer touch-manipulation items-start gap-3"
+                    >
+                      <span className={cn("relative flex size-10 shrink-0 items-center justify-center rounded-[5px] bg-gradient-to-br text-white transition-shadow sm:size-12", swatch(v.voice_id))}>
+                        <span className="relative z-10 flex items-center justify-center">
+                          {playing === v.voice_id ? <Square size={14} className="fill-white" /> : <Play size={14} className="fill-white" strokeWidth={0} />}
+                        </span>
+                      </span>
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="text-xs font-semibold text-[var(--content-title)] sm:text-[13px]">{v.name}</p>
+                        <p className="mt-0.5 text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">
+                          {[v.gender, v.language && `${v.language} accent`].filter(Boolean).join(", ")}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-[60px] sm:pl-0">
+                      <div className="flex items-center gap-1.5 text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">
+                        <span className="text-base leading-none" aria-hidden="true">{flagOf(v.language)}</span>
+                        <span>{v.language ?? "Unknown"}</span>
+                      </div>
+                      <span className="text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">
+                        {String(v.is_cloneable) === "True" || v.is_cloneable === true ? "Cloneable" : "Standard"}
+                      </span>
+                      <div className="ml-auto flex shrink-0 items-center gap-1 sm:ml-0">
+                        <button
+                          type="button"
+                          aria-label={`More options for ${v.name ?? "voice"}`}
+                          className="inline-flex size-11 min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] sm:size-8 sm:min-h-0 sm:min-w-0"
+                        >
+                          <MoreHorizontal size={16} strokeWidth={1.75} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {!loading && visible.length < matching.length && (
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShown((n) => n + PAGE)}
+                  className="inline-flex h-9 items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-5 text-[13px] font-normal text-[var(--content-title)] transition-colors hover:bg-[var(--accent)]"
+                >
                   Load more
                 </button>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>

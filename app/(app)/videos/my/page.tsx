@@ -7,11 +7,15 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Clapperboard, Play, Trash2, X } from "lucide-react";
 
+import { EmptyInboxArt, YoutubeGradientIcon } from "@/components/twin/nav-icons";
+import { ShareDialog } from "@/components/twin/share-dialog";
+
 import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
 import { deleteVideo, getVideo, listVideos, type HeygenVideo } from "@/lib/heygen/rest";
 import { forgetVideo, listLocalVideos, type VideoKind } from "@/lib/twin/local-library";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
+import { Alert } from "@/components/twin/alert";
 import { cn } from "@/lib/utils";
 
 type Chip = "all" | VideoKind;
@@ -63,6 +67,8 @@ function MyVideosInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Row | null>(null);
+  // Twin opens a share dialog here rather than navigating to the watch page.
+  const [shareFor, setShareFor] = useState<Row | null>(null);
 
   const load = useCallback(async () => {
     const local = new Map(listLocalVideos(tenant).map((v) => [v.id, v]));
@@ -117,84 +123,143 @@ function MyVideosInner() {
     chip === "twin" ? "No twin. Use Create Twin to make your twin videos." : "No videos in this category yet.";
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-7 sm:mb-8">
-        <h1 className="text-[24px] font-semibold tracking-[-0.6px] text-[var(--content-title)]">My Videos</h1>
-        <p className="mt-1 text-[14px] text-[var(--content-caption)]">Create stunning videos using our AI-powered generation.</p>
+    <div className="flex min-h-full w-full min-w-0 max-w-full flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+      <header className="mb-5 flex shrink-0 flex-col gap-3 sm:mb-8 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-semibold tracking-tight text-[var(--content-title)] sm:text-xl md:text-2xl">My Videos</h1>
+          <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-[var(--content-title)] sm:mt-2 sm:text-[13px] md:text-sm">
+            Create stunning videos using our AI-powered generation.
+          </p>
+        </div>
+        {/* Twin imports YouTube links here; we have no importer, so it's shown
+            disabled rather than pretending to work. */}
+        <button
+          type="button"
+          disabled
+          title="Not available in this build"
+          className="inline-flex h-9 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-xs font-normal text-[var(--content-title)] shadow-sm transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-50 sm:w-auto sm:shrink-0 sm:text-[13px]"
+        >
+          <YoutubeGradientIcon className="size-4 shrink-0" />
+          Add YouTube
+        </button>
       </header>
 
       {credential === "missing" ? (
         <HeygenGate />
       ) : (
         <>
-          <div className="mb-6 flex flex-wrap items-center gap-2">
+          <div className="-mx-4 mb-7 flex h-11 shrink-0 flex-nowrap items-center gap-2 overflow-x-auto px-4 [-ms-overflow-style:none] [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mb-8 sm:overflow-visible sm:px-0">
             {CHIPS.map((c) => (
-              <Link key={c.key} href={c.key === "all" ? "/videos/my" : `/videos/my?type=${c.key}`} aria-current={chip === c.key ? "page" : undefined}
-                className={cn("h-8 rounded-[var(--radius-pill)] border px-3.5 text-[13px] leading-8 transition-colors",
-                  chip === c.key ? "border-transparent bg-[var(--composer-chip)] font-medium text-[var(--brand)]" : "border-[var(--border)] bg-[var(--card)] text-[var(--content-title)] hover:bg-[var(--canvas-muted)]")}>
+              <Link
+                key={c.key}
+                href={c.key === "all" ? "/videos/my" : `/videos/my?type=${c.key}`}
+                aria-current={chip === c.key ? "page" : undefined}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center justify-center rounded-[8px] border px-4 text-sm font-medium leading-none transition-colors",
+                  chip === c.key
+                    ? "border-[color-mix(in_oklab,var(--brand)_50%,transparent)] bg-[#eef6fc] text-[#38A1E5] dark:bg-[rgb(15_45_72_/_0.92)] dark:text-[#5ec4ff]"
+                    : "border-[var(--border)] bg-[var(--card)] text-[var(--content-title)] hover:bg-[var(--accent)]",
+                )}
+              >
                 {c.label}
               </Link>
             ))}
             {generating > 0 && (
-              <span className="ml-auto rounded-[var(--radius-pill)] bg-[var(--composer-chip)] px-3 py-1 text-[12.5px] font-medium text-[var(--brand)]">
+              <span className="ml-auto shrink-0 rounded-[var(--radius-pill)] bg-[var(--composer-chip)] px-3 py-1 text-[12.5px] font-medium text-[var(--brand)]">
                 +{generating} more generating
               </span>
             )}
           </div>
 
-          {error && <p role="alert" className="mb-4 text-[13.5px] text-red-600">{error}</p>}
+          {error && <Alert className="mb-4" onDismiss={() => setError(null)}>{error}</Alert>}
 
+          <div className="space-y-4 pb-4 [overflow-anchor:none]">
+          <section>
+          {chip !== "all" && (
+            <h2 className="mb-2 text-sm font-semibold text-[var(--content-title)] sm:text-base">
+              {CHIPS.find((c) => c.key === chip)?.label}
+            </h2>
+          )}
           {loading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {Array.from({ length: 5 }).map((_, i) => <div key={i} className="aspect-video animate-pulse rounded-[var(--radius-card)] bg-[var(--canvas-muted)]" />)}
             </div>
           ) : visible.length === 0 ? (
-            <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--border)] bg-[var(--card)] p-12 text-center">
-              <Clapperboard size={28} strokeWidth={1.5} className="mx-auto mb-3 text-[var(--content-caption)]" />
-              <p className="text-[14px] text-[var(--content-title)]">{empty}</p>
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+              <EmptyInboxArt />
+              <p className="text-sm text-[var(--content-title)]">{empty}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 lg:gap-4 xl:grid-cols-5">
               {visible.map((v) => {
                 const done = v.status === "completed";
                 return (
-                  <article key={v.id} className="group relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-card)]">
-                    <button type="button" onClick={() => done && setOpen(v)} disabled={!done} className="block w-full text-left">
-                      <div className="relative aspect-video bg-[var(--canvas-muted)]">
-                        {v.thumbnail_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={v.thumbnail_url} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full items-center justify-center"><Clapperboard size={22} className="text-[var(--content-caption)]" /></div>
+                  <article
+                    key={v.id}
+                    className="group flex flex-col overflow-hidden rounded-[9px] border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-200 dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--muted-foreground)_35%,transparent)] hover:shadow-[0_8px_24px_rgba(15,23,42,0.1)] dark:hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+                  >
+                    {/* Twin sets the thumbnail well almost black so letterboxed
+                        renders don't glow against the card. */}
+                    <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-[#0f172a]">
+                      <button
+                        type="button"
+                        onClick={() => done && setOpen(v)}
+                        disabled={!done}
+                        aria-label={`Play ${v.localTitle ?? v.title ?? "video"}`}
+                        className="relative block size-full cursor-pointer text-left disabled:cursor-default"
+                      >
+                        {v.thumbnail_url && (
+                          <div className="absolute inset-0">
+                            <img src={v.thumbnail_url} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]" />
+                          </div>
                         )}
-                        {done ? (
-                          <div className="absolute inset-0 hidden items-center justify-center bg-black/45 group-hover:flex"><span className="flex items-center gap-1.5 text-[13px] font-medium text-white"><Play size={14} /> Click to Play</span></div>
-                        ) : (
-                          <span
-                            title={isStale(v) ? "This render has been pending for hours and is unlikely to finish." : undefined}
-                            className={cn(
-                              "absolute left-2 top-2 rounded-[var(--radius-pill)] px-2 py-0.5 text-[11px] font-medium text-white",
-                              v.status === "failed" ? "bg-red-500" : isStale(v) ? "bg-[var(--content-caption)]" : "bg-[var(--brand)]",
-                            )}
-                          >
-                            {v.status === "failed" ? "Failed" : isStale(v) ? "Stalled" : "Generating…"}
-                          </span>
+                        {done && (
+                          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/35 opacity-0 transition-opacity duration-200 group-focus-within:opacity-100 group-hover:opacity-100" aria-hidden="true">
+                            <span className="flex size-9 items-center justify-center rounded-full bg-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.25)] ring-1 ring-white/35 backdrop-blur-[2px] transition-transform duration-200 group-hover:scale-105">
+                              <Play size={14} className="fill-white text-white" strokeWidth={0} />
+                            </span>
+                            <span className="mt-1.5 px-2 text-center text-[10px] font-semibold leading-snug text-white sm:text-[11px]">Click to Play</span>
+                          </div>
                         )}
+                      </button>
+
+                      {!done && (
+                        <span
+                          title={isStale(v) ? "This render has been pending for hours and is unlikely to finish." : undefined}
+                          className={cn(
+                            "pointer-events-none absolute bottom-2 left-2 z-20 rounded-[5px] px-1.5 py-0.5 text-[9px] font-medium leading-none text-white sm:text-[10px]",
+                            v.status === "failed" ? "bg-red-500" : isStale(v) ? "bg-[var(--content-caption)]" : "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)]",
+                          )}
+                        >
+                          {v.status === "failed" ? "Failed" : isStale(v) ? "Stalled" : "Generating…"}
+                        </span>
+                      )}
+
+                      <div className="absolute right-1.5 top-1.5 z-20 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => remove(v)}
+                          aria-label={`Delete video ${v.localTitle ?? v.title ?? ""}`}
+                          className="inline-flex size-7 items-center justify-center rounded-[5px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] text-white opacity-100 shadow-[0_2px_8px_rgba(15,23,42,0.18)] transition-all duration-200 hover:scale-105 hover:brightness-[0.96] active:brightness-[0.92] sm:opacity-0 sm:group-hover:opacity-100"
+                        >
+                          <Trash2 size={14} strokeWidth={1.75} />
+                        </button>
                       </div>
-                      <div className="p-3">
-                        <p className="line-clamp-2 text-[13.5px] font-medium text-[var(--content-title)]">{v.localTitle ?? v.title ?? "Untitled video"}</p>
-                        <p className="mt-1 text-[12px] text-[var(--content-caption)]">{fmtDate(v.created_at)}</p>
-                      </div>
-                    </button>
-                    <button type="button" onClick={() => remove(v)} aria-label="Delete video"
-                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-[var(--radius-control)] bg-white/90 text-[var(--content-title)] shadow sm:hidden sm:group-hover:flex">
-                      <Trash2 size={14} strokeWidth={1.75} />
-                    </button>
+                    </div>
+
+                    <div className="px-2.5 py-2">
+                      <h2 className="line-clamp-2 text-xs font-semibold text-[var(--content-title)] transition-colors duration-200 group-hover:text-[var(--brand)] sm:text-[13px]">
+                        {v.localTitle ?? v.title ?? "Untitled video"}
+                      </h2>
+                      <p className="mt-0.5 text-[10px] leading-snug text-[var(--muted-foreground)] sm:text-[11px]">{fmtDate(v.created_at)}</p>
+                    </div>
                   </article>
                 );
               })}
             </div>
           )}
+          </section>
+          </div>
         </>
       )}
 
@@ -205,7 +270,7 @@ function MyVideosInner() {
             <div className="mb-3 flex items-start justify-between gap-4 text-white">
               <div><p className="text-[15px] font-medium">{open.localTitle ?? open.title}</p><p className="text-[12.5px] text-white/70">{fmtDate(open.created_at)}</p></div>
               <div className="flex items-center gap-2">
-                <Link href={`/video/watch/${open.id}`} className="text-[12.5px] text-white/80 hover:underline">Share</Link>
+                <button type="button" onClick={() => setShareFor(open)} className="text-[12.5px] text-white/80 hover:underline">Share</button>
                 <button type="button" onClick={() => setOpen(null)} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] hover:bg-white/10"><X size={16} /></button>
               </div>
             </div>
@@ -213,6 +278,12 @@ function MyVideosInner() {
           </div>
         </div>
       )}
+      <ShareDialog
+        open={!!shareFor}
+        onClose={() => setShareFor(null)}
+        videoId={shareFor?.id ?? ""}
+        title={shareFor?.localTitle ?? shareFor?.title}
+      />
     </div>
   );
 }

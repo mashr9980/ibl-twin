@@ -166,6 +166,9 @@ export interface HeygenVoice {
   language?: string | null;
   gender?: string | null;
   preview_audio?: string | null;
+  /** HeyGen returns these as strings ("True"/"False") on some plans. */
+  is_cloneable?: boolean | string | null;
+  emotion_support?: boolean | string | null;
 }
 
 /** GET /v2/voices */
@@ -350,6 +353,8 @@ export interface CreateClipInput {
   voice_id?: string;
   aspect_ratio?: "16:9" | "9:16" | "1:1";
   title?: string;
+  /** Clip length in seconds. Twin offers 5-8; HeyGen defaults to 5. */
+  duration?: number;
 }
 
 export async function createVideoClip(input: CreateClipInput): Promise<{ video_id: string }> {
@@ -365,6 +370,7 @@ export async function createVideoClip(input: CreateClipInput): Promise<{ video_i
               ? { type: "image", image_asset_id: input.image_asset_id }
               : { type: "image", image_url: input.image_url },
             ...(input.motion_prompt ? { motion_prompt: input.motion_prompt } : {}),
+            ...(input.duration ? { duration: input.duration } : {}),
             ...(input.script && input.voice_id
               ? { voice: { type: "text", voice_id: input.voice_id, input_text: input.script } }
               : {}),
