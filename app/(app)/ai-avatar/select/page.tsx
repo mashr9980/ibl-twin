@@ -23,6 +23,7 @@ import {
   listHeygenAvatars,
   type HeygenAvatar,
 } from "@/lib/heygen/rest";
+import { characterOf, groupCharacters, lookOf, type Character } from "@/lib/twin/characters";
 import { cn } from "@/lib/utils";
 
 const PAGE = 60;
@@ -33,20 +34,6 @@ const PAGE = 60;
  * Only a parenthesis or a *spaced* dash separates a look. Splitting on any
  * hyphen turned "Aditya in Blue t-shirt" into "Aditya in Blue t".
  */
-function characterOf(name: string): string {
-  return name.split(/\s*\(|\s+-\s+/)[0].trim() || name;
-}
-/** "Amanda in Blue Shirt (Front)" → "Front" */
-function lookOf(name: string): string {
-  const m = name.match(/\(([^)]+)\)/);
-  return m ? m[1].trim() : "Default";
-}
-
-interface Character {
-  name: string;
-  looks: HeygenAvatar[];
-}
-
 function PickerInner() {
   const credential = useHeygenCredential();
   const [avatars, setAvatars] = useState<HeygenAvatar[]>([]);
@@ -104,7 +91,7 @@ function PickerInner() {
   if (credential === "missing" || error === "gate") {
     return (
       <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8">
-        <h1 className="mb-7 text-[24px] font-semibold tracking-[-0.6px] text-[var(--content-title)]">Avatar</h1>
+        <h1 className="mb-7 text-lg font-semibold tracking-tight text-[var(--content-title)] sm:text-xl md:text-2xl">Avatar</h1>
         <HeygenGate />
       </div>
     );
@@ -112,11 +99,13 @@ function PickerInner() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-7 sm:mb-8">
-        <h1 className="text-[24px] font-semibold tracking-[-0.6px] text-[var(--content-title)]">Avatar</h1>
-        <p className="mt-1 text-[14px] text-[var(--content-caption)]">
+      <header className="mb-4 flex shrink-0 flex-col gap-3 sm:mb-5 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+        <h1 className="text-lg font-semibold tracking-tight text-[var(--content-title)] sm:text-xl md:text-2xl">Avatar</h1>
+        <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-[var(--content-title)] sm:mt-2 sm:text-[13px] md:text-sm">
           Choose an Avatar, add or select a Voice, and get an Avatar Video in minutes.
         </p>
+        </div>
       </header>
 
       {open ? (
@@ -132,7 +121,7 @@ function PickerInner() {
             <span className="font-medium text-[var(--content-title)]">{open.name}</span>
             <span className="text-[var(--content-caption)]">· {open.looks.length} looks</span>
           </nav>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {open.looks.map((a) => (
               // Inside a character, the full name repeats the character and
               // truncates away the one thing that differs — show the look.
@@ -147,29 +136,40 @@ function PickerInner() {
       ) : (
         <>
           <div className="mb-7 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
-            <label className="relative w-full sm:max-w-[280px]">
+            <label className="relative w-full min-w-0 max-w-sm sm:max-w-[280px] md:max-w-xs">
               <span className="sr-only">Search avatars</span>
-              <Search size={16} strokeWidth={1.75} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--content-caption)]" />
+              <Search size={16} strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search"
-                className="h-9 w-full rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--card)] pl-9 pr-3 text-[13.5px] text-[var(--content-title)] outline-none placeholder:text-[var(--content-caption)] focus:border-[var(--brand)]"
+                className="box-border h-11 w-full rounded-[8px] border border-[var(--border)] bg-[var(--card)] pl-10 pr-3 text-base text-[var(--content-title)] shadow-none outline-none placeholder:text-[var(--muted-foreground)] focus-visible:border-[var(--brand)] sm:text-sm"
               />
             </label>
-            <div role="group" aria-label="View" className="flex self-start rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--card)] p-0.5">
-              {(["grid", "list"] as const).map((v) => {
-                const Icon = v === "grid" ? LayoutGrid : List;
-                return (
-                  <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v}
-                    aria-label={v === "grid" ? "Grid view" : "List view"}
-                    className={cn("flex h-8 w-9 items-center justify-center rounded-[4px] transition-colors",
-                      view === v ? "bg-[var(--composer-chip)] text-[var(--brand)]" : "text-[var(--content-caption)] hover:text-[var(--content-title)]")}>
-                    <Icon size={16} strokeWidth={1.75} />
-                  </button>
-                );
-              })}
+            <div role="group" aria-label="View mode" className="hidden shrink-0 items-center gap-2 sm:flex">
+              <div className="inline-flex h-11 items-center rounded-[8px] border border-[var(--border)] bg-[var(--card)] p-1">
+                {(["grid", "list"] as const).map((v) => {
+                  const Icon = v === "grid" ? LayoutGrid : List;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={view === v}
+                      onClick={() => setView(v)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-sm font-medium transition-colors",
+                        view === v
+                          ? "bg-[var(--muted)] text-[var(--content-title)]"
+                          : "text-[var(--muted-foreground)] hover:text-[var(--content-title)]",
+                      )}
+                    >
+                      <Icon size={16} strokeWidth={1.75} />
+                      {v === "grid" ? "Grid" : "List"}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -180,7 +180,7 @@ function PickerInner() {
                 className="twin-gradient mt-4 h-9 px-4 text-[13px] font-semibold">Try again</button>
             </div>
           ) : loading ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 12 }).map((_, i) => (
                 <div key={i} className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)]">
                   <div className="aspect-4/5 animate-pulse bg-[var(--canvas-muted)]" />
@@ -198,37 +198,61 @@ function PickerInner() {
               <p className="mt-1 text-[13px] text-[var(--content-caption)]">Try another search or category chip.</p>
             </div>
           ) : view === "grid" ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
               {visible.map((c) => (
-                <button
+                <div
                   key={c.name}
-                  type="button"
-                  onClick={() => choose(c)}
-                  className="group overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] text-left shadow-[var(--shadow-card)] transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                  className="group/card relative flex w-full cursor-pointer flex-col gap-2 overflow-hidden rounded-[9px] border border-[color-mix(in_oklab,var(--border)_50%,transparent)] bg-[var(--card)] p-2 text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-shadow duration-150 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
                 >
-                  <div className="relative aspect-4/5 overflow-hidden bg-[var(--canvas-muted)]">
-                    {c.looks[0].preview_image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={c.looks[0].preview_image_url} alt={`${c.name} avatar preview`} loading="lazy" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center"><UserRound size={24} className="text-[var(--content-caption)]" /></div>
-                    )}
-                    {c.looks.length > 1 && (
-                      <span className="absolute left-2 top-2 rounded-[var(--radius-pill)] bg-[var(--brand)] px-2 py-0.5 text-[11px] font-medium text-white">
-                        {c.looks.length} looks
-                      </span>
-                    )}
-                    <div className="absolute inset-0 hidden items-center justify-center bg-black/45 group-hover:flex">
-                      <span className="text-[13px] font-medium text-white">Click to Select</span>
+                  <button
+                    type="button"
+                    onClick={() => choose(c)}
+                    aria-label={`Open ${c.name}`}
+                    className="relative w-full overflow-hidden text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                  >
+                    {/* Twin previews a character as a collage: one tall look beside
+                        two stacked ones, so a multi-look character reads as a set
+                        rather than a single portrait. */}
+                    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[7px]">
+                      <div className="flex h-full w-full items-stretch gap-[3px]">
+                        <div className="relative h-full min-w-0 flex-[1.65] overflow-hidden rounded-l-[7px] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)]">
+                          {c.looks[0]?.preview_image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={c.looks[0].preview_image_url} alt={c.name} loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
+                          ) : (
+                            <div className="flex h-full items-center justify-center"><UserRound size={22} className="text-[var(--content-caption)]" /></div>
+                          )}
+                        </div>
+                        <div className="flex h-full min-w-0 flex-1 flex-col gap-[3px]">
+                          {[1, 2].map((i) => {
+                            const look = c.looks[i] ?? c.looks[c.looks.length - 1];
+                            return (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "relative min-h-0 flex-1 overflow-hidden bg-[color-mix(in_oklab,var(--muted)_40%,transparent)]",
+                                  i === 2 && "rounded-br-[7px]",
+                                )}
+                              >
+                                {look?.preview_image_url && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={look.preview_image_url} alt={c.name} loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="p-3">
-                    <p className="truncate text-[14px] font-semibold text-[var(--content-title)]">{c.name}</p>
-                    <p className="mt-0.5 truncate text-[12px] text-[var(--content-caption)]">
-                      {c.looks.length > 1 ? c.looks.map((l) => lookOf(l.avatar_name ?? "")).join(" · ") : c.looks[0].gender ?? "Avatar"}
-                    </p>
-                  </div>
-                </button>
+                  </button>
+
+                  <button type="button" onClick={() => choose(c)} className="min-w-0 self-stretch px-1 pb-1 text-left">
+                    <span className="block truncate text-[15px] font-semibold leading-snug text-[var(--content-title)]">{c.name}</span>
+                    <span className="mt-0.5 block truncate text-xs leading-snug text-[var(--content-title)]">
+                      {c.looks.length > 1 ? `${c.looks.length} looks` : c.looks[0]?.gender ?? "Avatar"}
+                    </span>
+                  </button>
+                </div>
               ))}
             </div>
           ) : (

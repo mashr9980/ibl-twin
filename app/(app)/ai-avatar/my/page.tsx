@@ -11,7 +11,7 @@ function Inner() {
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-7 sm:mb-8">
-        <h1 className="text-[24px] font-semibold tracking-[-0.6px] text-[var(--content-title)]">Gallery</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-[var(--content-title)] sm:text-xl md:text-2xl">Gallery</h1>
         <p className="mt-1 text-[14px] text-[var(--content-caption)]">
           Choose an Avatar, add or select a Voice, and get an Avatar Video in minutes.
         </p>
