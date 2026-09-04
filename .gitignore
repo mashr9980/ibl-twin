@@ -58,3 +58,6 @@ e2e/.env.development
 # Playwright output
 test-results/
 playwright-report/
+
+# stray capture output at repo root
+/docs-shots-*.png
