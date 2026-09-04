@@ -126,7 +126,18 @@ export function GenerateModal({ avatar, onClose }: { avatar: HeygenAvatar; onClo
     }
   }
 
-  const ratio = orientation === "landscape" ? "16 / 9" : orientation === "portrait" ? "9 / 16" : "4 / 5";
+  // Twin nests two frames: the outer stage keeps 4:5 so the controls never
+  // move, and only the inner media box takes the chosen ratio.
+  const mediaRatio = orientation === "landscape" ? "16 / 9" : orientation === "portrait" ? "9 / 16" : "4 / 5";
+  const stageWidth = orientation
+    ? "max-w-[min(100%,260px)] sm:max-w-[min(100%,320px)]"
+    : "max-w-[min(100%,360px)] sm:max-w-[min(100%,420px)]";
+  const mediaWidth =
+    orientation === "portrait"
+      ? "max-w-[min(100%,220px)] sm:max-w-[min(100%,260px)]"
+      : orientation === "landscape"
+        ? "max-w-full"
+        : "max-w-[min(100%,360px)] sm:max-w-[min(100%,420px)]";
   const initial = (voice?.name ?? "?").trim().charAt(0).toUpperCase();
 
   /** Twin's overlay control: 36px on touch, 28px from sm up. */
@@ -157,17 +168,24 @@ export function GenerateModal({ avatar, onClose }: { avatar: HeygenAvatar; onClo
             <div className="flex min-h-[min(220px,40dvh)] flex-col border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] p-4 sm:p-5 lg:row-span-2 lg:min-h-[min(320px,45dvh)] lg:overflow-hidden lg:border-b-0 lg:border-r">
               <div className="flex flex-1 items-center justify-center">
                 <div
-                  className="relative mx-auto w-full max-w-[min(100%,360px)] overflow-hidden rounded-lg bg-[var(--muted)] sm:max-w-[min(100%,420px)]"
-                  style={{ aspectRatio: ratio }}
+                  className={cn("relative mx-auto w-full overflow-hidden rounded-lg bg-[var(--muted)]", stageWidth)}
+                  style={{ aspectRatio: "4 / 5" }}
                 >
-                  {avatar.preview_image_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={avatar.preview_image_url}
-                      alt={avatar.avatar_name}
-                      className={cn("absolute inset-0 size-full", fit === "cover" ? "object-cover" : "object-contain")}
-                    />
-                  )}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div
+                      className={cn("relative w-full overflow-hidden rounded-lg bg-[var(--muted)]", orientation === "landscape" ? "h-auto" : "h-full", mediaWidth)}
+                      style={{ aspectRatio: mediaRatio }}
+                    >
+                      {avatar.preview_image_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={avatar.preview_image_url}
+                          alt={avatar.avatar_name}
+                          className={cn("absolute inset-0 size-full", fit === "cover" ? "object-cover" : "object-contain")}
+                        />
+                      )}
+                    </div>
+                  </div>
 
                   <div className="absolute inset-x-0 bottom-0 z-10 px-3 pb-3 pt-8">
                     <div
