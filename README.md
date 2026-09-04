@@ -70,6 +70,26 @@ pnpm dev
 
 Server-side only (never `NEXT_PUBLIC_`): `HEYGEN_API_KEY`.
 
+## Desktop and mobile
+
+vibe covers desktop and mobile through Tauri, and the starter's auth helpers
+already branch on it: `isTauri()`, `isTauriMobile()` and a custom-scheme
+redirect so SSO returns into the app rather than a browser tab.
+
+`src-tauri/` wraps the deployed site rather than bundling a static export,
+because the app is server-rendered and the HeyGen proxy runs as a route
+handler. SSO and video generation therefore behave identically to the web.
+
+```bash
+pnpm tauri build --bundles app dmg   # macOS .app and .dmg
+pnpm tauri ios build --target aarch64-sim --debug
+pnpm tauri ios dev                   # run on a simulator
+```
+
+Built and verified: macOS (Apple silicon) and the iOS simulator. iOS on a
+device and Android need a paid Apple developer account and the Android SDK
+respectively; vibe ships CI workflows for both.
+
 ## Test
 
 ```bash

@@ -61,3 +61,7 @@ playwright-report/
 
 # stray capture output at repo root
 /docs-shots-*.png
+
+# Tauri build output
+/src-tauri/target/
+/src-tauri/gen/
