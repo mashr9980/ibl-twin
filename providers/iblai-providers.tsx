@@ -40,6 +40,12 @@ const storageService = LocalStorageService.getInstance();
 /** Routes that do NOT require authentication. */
 const PUBLIC_ROUTES = new Map<RegExp, () => Promise<boolean>>([
   [new RegExp("^/sso-login"), async () => false],
+  // The sign-in screen must render for signed-out visitors instead of
+  // bouncing them straight to the Auth SPA.
+  [new RegExp("^/login"), async () => false],
+  // Twin links these from the sign-in footer, so they have to open without a
+  // session; sending a signed-out reader to the Auth SPA loses the page.
+  [new RegExp("^/(privacy|terms|faq)"), async () => false],
 ]);
 
 export function IblaiProviders({ children }: { children: ReactNode }) {
@@ -93,7 +99,13 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
   // Tenant resolution: .env -> app_tenant -> localStorage tenant
   const tenantKey = useMemo(() => resolveAppTenant(), [isInitialized]);
 
-  const isSsoRoute = pathname?.startsWith("/sso-login") ?? false;
+  const isSsoRoute =
+    (pathname?.startsWith("/sso-login") ||
+      pathname?.startsWith("/login") ||
+      pathname?.startsWith("/privacy") ||
+      pathname?.startsWith("/terms") ||
+      pathname?.startsWith("/faq")) ??
+    false;
 
   const LOADING = (
     <div className="flex min-h-screen items-center justify-center">

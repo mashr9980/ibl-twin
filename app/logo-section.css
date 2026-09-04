@@ -1,0 +1,20 @@
+/* Twin's wordmark, verbatim from its deployed CSS. Shared by the sign-in
+   screen and the sidebar rail. */
+
+.logo-section{--logo-scale-render:calc(var(--logo-scale, 1) * var(--logo-scale-mobile-factor, 1));flex-shrink:0}
+.logo-section,.logo-section__row{display:flex;justify-content:center;overflow:visible;max-width:100%}
+.logo-section__row{align-items:center;gap:calc(10px * var(--logo-scale-render))}
+.logo-section__img{width:auto;object-fit:contain;margin-top:0;margin-bottom:0;padding-top:calc(2px * var(--logo-scale-render));flex-shrink:0}
+.logo-section--agent .logo-section__img,.logo-section:not(.logo-section--normal):not(.logo-section--helpdesk):not(.logo-section--custom) .logo-section__img{height:calc(var(--logo-img-h-agent) * var(--logo-scale-render));padding-top:0;margin-top:calc(var(--logo-img-margin-top-agent) * var(--logo-scale-render))}
+.logo-section--normal:not(.logo-section--avatar) .logo-section__img{height:calc(var(--logo-img-h-normal) * var(--logo-scale-render));padding-top:calc(var(--logo-img-padding-normal) * var(--logo-scale-render));margin-bottom:calc(1px * var(--logo-scale-render))}
+.logo-section--avatar .logo-section__img{height:calc(var(--logo-img-h-avatar) * var(--logo-scale-render));padding-top:calc(var(--logo-img-padding-normal) * var(--logo-scale-render));margin-bottom:calc(var(--logo-img-margin-bottom-avatar) * var(--logo-scale-render))}
+.logo-section--helpdesk .logo-section__img{height:calc(var(--logo-img-h-helpdesk) * var(--logo-scale-render));padding-top:0;margin-top:calc(var(--logo-img-margin-top-helpdesk) * var(--logo-scale-render))}
+.logo-section--custom .logo-section__img{height:calc(var(--logo-img-h-custom, 50px) * var(--logo-scale-render));width:auto;padding-top:0;margin-top:calc(var(--logo-img-margin-top-custom, 0px) * var(--logo-scale-render));margin-bottom:calc(var(--logo-img-margin-bottom-custom, 0px) * var(--logo-scale-render))}
+.logo-section--custom.logo-section--has-width .logo-section__img{width:calc(var(--logo-img-w-custom) * var(--logo-scale-render))}
+.logo-section__text{display:inline-flex;flex-direction:column;align-items:flex-start;line-height:1;gap:0;overflow:visible;min-width:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;text-box-trim:trim-start;text-box-edge:cap text}
+.logo-section__line{display:block;line-height:1;overflow:visible;padding:0;-webkit-box-decoration-break:clone;box-decoration-break:clone;text-transform:lowercase;letter-spacing:-.025em;background-image:linear-gradient(90deg,#00A4EC,#159BF4 30%,#4E91FE 62%,#6D87FF);background-size:100% 100%;background-repeat:no-repeat;background-clip:text;-webkit-background-clip:text;color:transparent;-webkit-text-fill-color:transparent;white-space:nowrap}
+.logo-section__line--top{font-size:calc(2.351rem * var(--logo-scale-render) * .72);font-weight:400;text-box-trim:trim-start;text-box-edge:cap alphabetic}
+.logo-section__line-wrap--bottom{display:block;overflow:visible;line-height:1;margin-top:-.19em;padding:0 0 .1em}
+.logo-section__line--bottom{display:block;font-size:calc(2.351rem * var(--logo-scale-render) * .85);font-weight:600;line-height:1;padding:0 0 .06em;background-image:linear-gradient(90deg,#00A4EC,#159BF4 22%,#4E91FE 58%,#6D87FF 90%,#6D87FF)}
+.logo-section--sidebar{--logo-scale:0.7;--logo-scale-mobile-factor:1;justify-content:flex-start}
+
