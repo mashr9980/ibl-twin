@@ -127,7 +127,9 @@ test.describe("screens", () => {
     await expect(page.getByRole("heading", { name: "Gallery" })).toBeVisible({ timeout: 30_000 });
     if (isMobile) await page.getByRole("button", { name: "Open menu" }).click();
     await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Video Clip" }).last().click();
-    await expect(page).toHaveURL(/\/videos\/my\?type=clip$/);
+    // Default 5 s is too tight straight after a click when the box is busy
+    // with the rest of the suite; flaked once in a full run, 6/6 on rerun.
+    await expect(page).toHaveURL(/\/videos\/my\?type=clip$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "My Videos" })).toBeVisible({ timeout: 30_000 });
   });
 });
