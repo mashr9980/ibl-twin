@@ -54,3 +54,7 @@ next-env.d.ts
 # Playwright: real session tokens + local creds. Never commit.
 playwright/.auth/
 e2e/.env.development
+
+# Playwright output
+test-results/
+playwright-report/
