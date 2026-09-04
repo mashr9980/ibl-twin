@@ -2,9 +2,9 @@
 
 /** Create Video Clip (teardown §2.5): image → video with a motion prompt. */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ImageIcon, Link as LinkIcon, Sparkles, Upload } from "lucide-react";
+import { Check, ChevronDown, ImageIcon, Link as LinkIcon, Sparkles, Upload } from "lucide-react";
 
 import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
@@ -18,6 +18,16 @@ const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const IMAGE_MAX = 30 * 1024 * 1024;
 
 type Ratio = "16:9" | "9:16" | "1:1";
+/** HeyGen exposes no model-list endpoint, so the set it accepts is fixed here. */
+const MODELS = [
+  {
+    id: "veo3",
+    name: "Veo 3",
+    logo: "/images/veo3.png",
+    blurb: "Google's latest video generation model with cinematic quality, realistic motion, and native audio.",
+  },
+] as const;
+
 const RATIOS: { value: Ratio; label: string }[] = [
   { value: "16:9", label: "1280×768" },
   { value: "9:16", label: "768×1280" },
@@ -36,6 +46,24 @@ export default function CreateVideoClipPage() {
   const [ratio, setRatio] = useState<Ratio>("16:9");
   // Twin exposes duration as a 5-8s slider; HeyGen takes the number directly.
   const [duration, setDuration] = useState(5);
+  const [modelId, setModelId] = useState<(typeof MODELS)[number]["id"]>("veo3");
+  const [modelOpen, setModelOpen] = useState(false);
+  const modelRef = useRef<HTMLDivElement>(null);
+  const model = MODELS.find((m) => m.id === modelId) ?? MODELS[0];
+
+  useEffect(() => {
+    if (!modelOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!modelRef.current?.contains(e.target as Node)) setModelOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setModelOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [modelOpen]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,26 +166,67 @@ export default function CreateVideoClipPage() {
           </article>
 
           <div className="flex min-w-0 flex-col gap-5">
-            {/* Twin makes the model a picker; only Veo 3 is offered today. */}
-            <button
-              type="button"
-              aria-haspopup="listbox"
-              aria-expanded={false}
-              className="relative flex w-full min-w-0 items-start gap-0 rounded-[5px] border border-[var(--border)] bg-[var(--card)] px-4 py-3.5 text-left text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-shadow hover:shadow-md"
-            >
-              <span className="flex w-full min-w-0 items-start gap-3 overflow-hidden pr-8">
-                <span aria-hidden="true" className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--card)] ring-1 ring-[var(--border)]">
-                  <img src="/images/veo3.png" alt="" width={32} height={32} className="size-8 max-h-8 max-w-8 object-contain" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold leading-snug text-[var(--content-title)] sm:text-sm">Veo 3</span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">
-                    Google&apos;s latest video generation model with cinematic quality, realistic motion, and native audio.
+            <div className="relative" ref={modelRef}>
+              <button
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={modelOpen}
+                onClick={() => setModelOpen((v) => !v)}
+                className="relative flex w-full min-w-0 items-start gap-0 rounded-[5px] border border-[var(--border)] bg-[var(--card)] px-4 py-3.5 text-left text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-shadow hover:shadow-md dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
+              >
+                <span className="flex w-full min-w-0 items-start gap-3 overflow-hidden pr-8">
+                  <span aria-hidden="true" className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--card)] ring-1 ring-[var(--border)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={model.logo} alt="" width={32} height={32} className="size-8 max-h-8 max-w-8 object-contain" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-semibold leading-snug text-[var(--content-title)] sm:text-sm">{model.name}</span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">{model.blurb}</span>
                   </span>
                 </span>
-              </span>
-              <ChevronDown className="absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[var(--muted-foreground)]" strokeWidth={2} aria-hidden />
-            </button>
+                <ChevronDown
+                  className={cn(
+                    "absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[var(--muted-foreground)] transition-transform",
+                    modelOpen && "rotate-180",
+                  )}
+                  strokeWidth={2}
+                  aria-hidden
+                />
+              </button>
+
+              {modelOpen && (
+                <ul
+                  role="listbox"
+                  aria-label="Video model"
+                  className="absolute z-30 mt-1 w-full overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--popover)] p-1 shadow-[var(--shadow-popover)]"
+                >
+                  {MODELS.map((m) => (
+                    <li key={m.id}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={m.id === modelId}
+                        onClick={() => { setModelId(m.id); setModelOpen(false); }}
+                        className={cn(
+                          "flex w-full items-start gap-3 rounded-[5px] px-2 py-2 text-left transition-colors hover:bg-[var(--accent)]",
+                          m.id === modelId && "bg-[var(--composer-chip)]",
+                        )}
+                      >
+                        <span aria-hidden="true" className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--card)] ring-1 ring-[var(--border)]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={m.logo} alt="" width={32} height={32} className="size-8 object-contain" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[13px] font-semibold leading-snug text-[var(--content-title)] sm:text-sm">{m.name}</span>
+                          <span className="mt-0.5 block text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">{m.blurb}</span>
+                        </span>
+                        {m.id === modelId && <Check className="mt-0.5 size-4 shrink-0 text-[var(--brand)]" strokeWidth={2} aria-hidden />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             <div className="rounded-[9px] border border-[var(--border)] bg-[var(--card)] p-4 text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
@@ -200,7 +269,7 @@ export default function CreateVideoClipPage() {
             <button type="button" onClick={generate} disabled={busy || !file || !prompt.trim()} aria-busy={busy}
               className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-[5px] border-0 bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] px-4 py-2 text-xs font-medium text-white shadow-none transition-all hover:brightness-[0.96] active:brightness-[0.92] disabled:pointer-events-none disabled:opacity-50 sm:h-11 sm:text-[13px]">
               <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
-              {busy ? "Generating…" : "Generate with Veo 3"}
+              {busy ? "Generating…" : `Generate with ${model.name}`}
             </button>
           </div>
         </div>
