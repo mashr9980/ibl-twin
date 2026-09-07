@@ -8,6 +8,17 @@
 
 import config from "./config";
 import { resolveAppTenant } from "./tenant";
+import {
+  attemptAutoAccess,
+  beginRecovery,
+  clearFailedTenantJoin,
+  currentUserEmail,
+  endRecovery,
+  hasFailedTenantJoin,
+  isRecovering,
+  loginNoticeUrl,
+  recoverySucceeded,
+} from "./access";
 
 /** Check if running inside a Tauri app. */
 export function isTauri(): boolean {
@@ -48,6 +59,8 @@ export async function redirectToAuthSpa(
   logout?: boolean,
   saveRedirect?: boolean,
 ) {
+  if (typeof window !== "undefined" && (isRecovering() || recoverySucceeded())) return;
+
   const redirectOrigin = getRedirectOrigin();
   const path = redirectTo ?? (typeof window !== "undefined" ? window.location.pathname : "/");
 
@@ -55,12 +68,33 @@ export async function redirectToAuthSpa(
     localStorage.setItem("redirectTo", path);
   }
 
+  const tenant = platformKey || resolveAppTenant();
+
+  // A refused tenant join sends the user back here to sign in again, which on
+  // its own just loops. Break out and explain instead.
+  if (typeof window !== "undefined" && hasFailedTenantJoin(tenant)) {
+    const email = currentUserEmail();
+    clearFailedTenantJoin(tenant);
+
+    // The session is still valid at this point, so if the invitation lands the
+    // membership check passes on a plain reload.
+    beginRecovery();
+    if (await attemptAutoAccess(email, tenant, "not_a_member")) {
+      window.location.replace("/");
+      return;
+    }
+    endRecovery();
+
+    localStorage.clear();
+    window.location.href = loginNoticeUrl("no_access", email);
+    return;
+  }
+
   if (!logout && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
     window.location.href = "/login";
     return;
   }
 
-  const tenant = platformKey || resolveAppTenant();
   let authUrl = `${config.authUrl()}/login?app=custom&redirect-to=${redirectOrigin}`;
   if (tenant) authUrl += `&tenant=${encodeURIComponent(tenant)}`;
   if (logout) authUrl += "&logout=1";

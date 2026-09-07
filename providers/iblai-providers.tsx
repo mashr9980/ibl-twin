@@ -34,6 +34,16 @@ import { LocalStorageService } from "@/lib/iblai/storage-service";
 import config from "@/lib/iblai/config";
 import { resolveAppTenant, checkTenantMismatch } from "@/lib/iblai/tenant";
 import { redirectToAuthSpa } from "@/lib/iblai/auth-utils";
+import {
+  attemptAutoAccess,
+  beginRecovery,
+  endRecovery,
+  recoverySucceeded,
+  classifyAuthFailure,
+  currentUserEmail,
+  loginNoticeUrl,
+  type NoticeCode,
+} from "@/lib/iblai/access";
 
 const storageService = LocalStorageService.getInstance();
 
@@ -87,6 +97,31 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  const [authNotice, setAuthNotice] = useState<NoticeCode | null>(null);
+
+  // The SDK reports the failure and stops; without this the tenant fallback
+  // stays on screen forever.
+  useEffect(() => {
+    if (!authNotice) return;
+    if (window.location.pathname.startsWith("/login")) return;
+
+    const email = currentUserEmail();
+    const recoverable =
+      authNotice === "no_access" || authNotice === "other_workspace";
+
+    void (async () => {
+      beginRecovery();
+      if (recoverable && (await attemptAutoAccess(email, resolveAppTenant(), authNotice))) {
+        window.location.replace("/");
+        return;
+      }
+      endRecovery();
+      if (recoverySucceeded()) return;
+      localStorage.clear();
+      window.location.replace(loginNoticeUrl(authNotice, email));
+    })();
+  }, [authNotice]);
+
   const username = useMemo(() => {
     if (typeof window === "undefined") return "";
     try {
@@ -114,6 +149,7 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
   );
 
   if (!isInitialized || !mounted) return LOADING;
+  if (authNotice && !isSsoRoute) return LOADING;
 
   return (
     <ReduxProvider store={iblaiStore}>
@@ -171,12 +207,23 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
             }
           }}
           saveTenant={(t: string) => localStorage.setItem("tenant", t)}
-          onAuthFailure={(reason: string) =>
-            console.error("[TenantProvider] Auth failure:", reason)
-          }
-          handleTenantSwitch={async () => {
-            const tenant = resolveAppTenant();
-            redirectToAuthSpa(undefined, tenant, false, true);
+          onAuthFailure={(reason: string) => {
+            console.error("[TenantProvider] Auth failure:", reason);
+            setAuthNotice(classifyAuthFailure(reason));
+          }}
+          // The SDK asks to switch when the user belongs to a different
+          // platform than the one this app serves. Following it would sign
+          // them into someone else's workspace, and ignoring the argument
+          // loops them through the Auth SPA forever, so say so instead.
+          handleTenantSwitch={async (requested?: unknown) => {
+            const appTenant = resolveAppTenant();
+            const target = typeof requested === "string" ? requested : "";
+            if (target && appTenant && target !== appTenant) {
+              console.error("[TenantProvider] Tenant switch refused:", target);
+              setAuthNotice("other_workspace");
+              return;
+            }
+            redirectToAuthSpa(undefined, appTenant, false, true);
           }}
           redirectToAuthSpa={redirectToAuthSpa}
           username={username}

@@ -13,16 +13,44 @@
  * across and lets the SPA take it from there.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { redirectToAuthSpa } from "@/lib/iblai/auth-utils";
+import config from "@/lib/iblai/config";
+import {
+  EMAIL_PARAM,
+  NOTICE_PARAM,
+  fetchPlatformAccessConfig,
+  isNoticeCode,
+} from "@/lib/iblai/access";
+import { AuthNotice } from "@/components/twin/auth-notice";
+import { tenantSignupUrl } from "@/lib/iblai/signup";
 
 const EMAIL = /^\S+@\S+\.\S+$/;
 
 export default function LoginPage() {
+  const params = useSearchParams();
+  const rawNotice = params?.get(NOTICE_PARAM);
+  const notice = isNoticeCode(rawNotice) ? rawNotice : null;
+  const noticeEmail = params?.get(EMAIL_PARAM)?.trim() ?? "";
+
+  const [inviteOnly, setInviteOnly] = useState<boolean | null>(null);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    void fetchPlatformAccessConfig(
+      config.dmUrl(),
+      config.mainTenantKey(),
+      ac.signal,
+    ).then((cfg) => {
+      if (cfg) setInviteOnly(!cfg.allowSelfLinking);
+    });
+    return () => ac.abort();
+  }, []);
 
   function go() {
     setBusy(true);
@@ -89,6 +117,14 @@ export default function LoginPage() {
                 </p>
               </div>
 
+              {notice && (
+                <AuthNotice
+                  code={notice}
+                  email={noticeEmail}
+                  inviteOnly={inviteOnly !== false}
+                />
+              )}
+
               <div className="auth-card">
                 <form className="auth-card__stack" noValidate onSubmit={onSubmit}>
                   <div>
@@ -126,6 +162,13 @@ export default function LoginPage() {
                     </svg>
                     Continue with Google
                   </button>
+
+                  {inviteOnly === false && (
+                    <p className="auth-card__signup">
+                      New here?{" "}
+                      <a href={tenantSignupUrl()}>Create an account</a>
+                    </p>
+                  )}
 
                   <div className="auth-card__legal">
                     <a target="_blank" rel="noopener noreferrer" href="/terms">Terms of Use</a>

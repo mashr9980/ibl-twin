@@ -68,9 +68,12 @@ export function checkTenantMismatch(): boolean {
   const sdkTenant = localStorage.getItem("tenant") ?? "";
 
   if (appTenant && sdkTenant && sdkTenant !== appTenant) {
-    // Use dynamic import to avoid hard dependency on auth-utils from tenant module.
-    import("./auth-utils").then(({ redirectToAuthSpa }) => {
-      redirectToAuthSpa(undefined, appTenant, false, false);
+    // The session resolved to a platform this app does not serve. Sending the
+    // user back to sign in just repeats it, so explain instead.
+    import("./access").then(({ loginNoticeUrl, currentUserEmail }) => {
+      const target = loginNoticeUrl("other_workspace", currentUserEmail());
+      localStorage.clear();
+      window.location.replace(target);
     });
     return true;
   }
