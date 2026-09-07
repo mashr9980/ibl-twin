@@ -34,7 +34,14 @@ function getRedirectOrigin(): string {
   return origin;
 }
 
-/** Redirect the browser to the ibl.ai Auth SPA for login. */
+/**
+ * Send a signed-out visitor to the branded sign-in screen first.
+ *
+ * The Auth SPA is where the session is actually issued, but jumping straight
+ * there means the first thing anyone sees is ibl.ai's generic login rather
+ * than this app. /login renders the branded screen and hands off from there.
+ * Logout still goes direct, since there is nothing to brand on the way out.
+ */
 export async function redirectToAuthSpa(
   redirectTo?: string,
   platformKey?: string,
@@ -48,15 +55,16 @@ export async function redirectToAuthSpa(
     localStorage.setItem("redirectTo", path);
   }
 
+  if (!logout && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    window.location.href = "/login";
+    return;
+  }
+
   const tenant = platformKey || resolveAppTenant();
   let authUrl = `${config.authUrl()}/login?app=custom&redirect-to=${redirectOrigin}`;
   if (tenant) authUrl += `&tenant=${encodeURIComponent(tenant)}`;
   if (logout) authUrl += "&logout=1";
 
-  // All platforms (web, desktop Tauri, mobile Tauri): navigate the window
-  // to the Auth SPA.  On desktop Tauri the auth page loads in-app, and
-  // the Rust on_navigation filter opens OAuth providers (Google, Apple)
-  // in a popup window automatically.
   window.location.href = authUrl;
 }
 

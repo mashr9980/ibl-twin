@@ -26,6 +26,7 @@ export default function LoginPage() {
 
   function go() {
     setBusy(true);
+    // Already on /login, so this call falls through to the Auth SPA.
     void redirectToAuthSpa(undefined, undefined, false, true);
   }
 
