@@ -21,6 +21,8 @@ import {
 
 import { createVideo, listHeygenVoices, type HeygenAvatar, type HeygenVoice, type Orientation, heygenErrorMessage } from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
+import { useTwinPreferences } from "@/hooks/use-twin-preferences";
+import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +55,7 @@ export function GenerateModal({
   kind?: "avatar" | "twin";
 }) {
   const router = useRouter();
+  const { prefs, loading: prefsLoading } = useTwinPreferences(resolveAppTenant());
   const [voices, setVoices] = useState<HeygenVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
   const [script, setScript] = useState("");
@@ -71,7 +74,7 @@ export function GenerateModal({
     listHeygenVoices()
       .then((v) => {
         setVoices(v);
-        if (v[0]) setVoiceId(v[0].voice_id);
+        if (v[0]) setVoiceId((cur) => cur || v[0].voice_id);
       })
       .catch(() => setError("Couldn't load voices. Please try again."));
   }, []);
@@ -81,6 +84,16 @@ export function GenerateModal({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [busy, onClose]);
+
+  // The member's saved defaults, applied once when they arrive.
+  const prefsApplied = useRef(false);
+  useEffect(() => {
+    if (prefsLoading || prefsApplied.current || !voices.length) return;
+    prefsApplied.current = true;
+    if (prefs.voiceId && voices.some((v) => v.voice_id === prefs.voiceId)) setVoiceId(prefs.voiceId);
+    if (prefs.speed && prefs.speed !== 1) setSpeed(prefs.speed);
+    setOrientation((cur) => cur ?? prefs.orientation);
+  }, [prefsLoading, prefs, voices]);
 
   const voice = useMemo(() => voices.find((v) => v.voice_id === voiceId), [voices, voiceId]);
 

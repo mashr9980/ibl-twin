@@ -468,18 +468,37 @@ export async function deleteVideo(videoId: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Image → video clip (/v3/videos, "image" variant)
+// Image → video clip (POST /v3/videos, type "image": the person in the
+// picture speaks the script; HeyGen's v3 image videos have no motion prompt)
+
+export interface HeygenV3Asset {
+  asset_id: string;
+  url?: string;
+  mime_type?: string;
+}
+
+/** POST /v3/assets (multipart) → {asset_id, url}; what /v3/videos accepts as an image. */
+export async function uploadHeygenV3Asset(file: File | Blob): Promise<HeygenV3Asset> {
+  const form = new FormData();
+  form.append("file", file, file instanceof File ? file.name : "image");
+  const res = await fetchWithTimeout(
+    `${API_BASE}/v3/assets`,
+    { method: "POST", headers: { ...authHeaders(), Accept: "application/json" }, body: form },
+    UPLOAD_TIMEOUT_MS,
+  );
+  if (res.status === 424) throw new HeygenCredentialMissingError();
+  if (!res.ok) throw await failure("/v3/assets", res);
+  return unwrap(await res.json());
+}
 
 export interface CreateClipInput {
-  image_asset_id?: string;
+  asset_id?: string;
   image_url?: string;
-  motion_prompt?: string;
-  script?: string;
-  voice_id?: string;
-  aspect_ratio?: "16:9" | "9:16" | "1:1";
+  script: string;
+  voice_id: string;
+  aspect_ratio?: "16:9" | "9:16" | "1:1" | "auto";
   title?: string;
-  /** Clip length in seconds. Twin offers 5-8; HeyGen defaults to 5. */
-  duration?: number;
+  speed?: number;
 }
 
 export async function createVideoClip(input: CreateClipInput): Promise<{ video_id: string }> {
@@ -487,20 +506,14 @@ export async function createVideoClip(input: CreateClipInput): Promise<{ video_i
     await request<{ data?: { video_id: string } } & Partial<{ video_id: string }>>("/v3/videos", {
       method: "POST",
       body: {
+        type: "image",
+        image: input.asset_id ? { type: "asset_id", asset_id: input.asset_id } : { type: "url", url: input.image_url },
+        script: input.script,
+        voice_id: input.voice_id,
         title: input.title,
         aspect_ratio: input.aspect_ratio ?? "16:9",
-        video_inputs: [
-          {
-            character: input.image_asset_id
-              ? { type: "image", image_asset_id: input.image_asset_id }
-              : { type: "image", image_url: input.image_url },
-            ...(input.motion_prompt ? { motion_prompt: input.motion_prompt } : {}),
-            ...(input.duration ? { duration: input.duration } : {}),
-            ...(input.script && input.voice_id
-              ? { voice: { type: "text", voice_id: input.voice_id, input_text: input.script } }
-              : {}),
-          },
-        ],
+        resolution: "1080p",
+        ...(input.speed && input.speed !== 1 ? { voice_settings: { speed: input.speed } } : {}),
       },
     }),
   );

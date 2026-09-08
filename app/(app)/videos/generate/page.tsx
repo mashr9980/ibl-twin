@@ -1,6 +1,6 @@
 "use client";
 
-/** Create Video Clip (teardown §2.5): image → video with a motion prompt. */
+/** Create Video Clip (teardown §2.5): a picture of a person speaks your text (HeyGen v3 image video). */
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,8 +10,10 @@ import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
 import {
   createVideoClip,
-  uploadHeygenAsset,
   heygenErrorMessage,
+  uploadHeygenV3Asset,
+  listHeygenVoices,
+  type HeygenVoice,
 } from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
 import { Alert } from "@/components/twin/alert";
@@ -46,8 +48,28 @@ export default function CreateVideoClipPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState<Ratio>("16:9");
-  // Twin exposes duration as a 5-8s slider; HeyGen takes the number directly.
-  const [duration, setDuration] = useState(5);
+  const [voices, setVoices] = useState<HeygenVoice[]>([]);
+  const [voiceId, setVoiceId] = useState("");
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const voiceRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (credential !== "ok") return;
+    listHeygenVoices()
+      .then((v: HeygenVoice[]) => {
+        setVoices(v);
+        if (v[0]) setVoiceId((cur) => cur || v[0].voice_id);
+      })
+      .catch(() => setError("Couldn't load voices. Please try again."));
+  }, [credential]);
+  useEffect(() => {
+    if (!voiceOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!voiceRef.current?.contains(e.target as Node)) setVoiceOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [voiceOpen]);
+  const voice = voices.find((v) => v.voice_id === voiceId);
   const [modelId, setModelId] = useState<(typeof MODELS)[number]["id"]>("veo3");
   const [modelOpen, setModelOpen] = useState(false);
   const modelRef = useRef<HTMLDivElement>(null);
@@ -82,16 +104,16 @@ export default function CreateVideoClipPage() {
   }
 
   async function generate() {
-    if (!file || !prompt.trim()) return;
+    if (!file || !prompt.trim() || !voiceId) return;
     setBusy(true);
     setError(null);
     const title = prompt.trim().length > 60 ? `${prompt.trim().slice(0, 60)}…` : prompt.trim();
     try {
-      const asset = await uploadHeygenAsset(file);
+      const asset = await uploadHeygenV3Asset(file);
       const { video_id } = await createVideoClip({
-        image_asset_id: asset.id,
-        motion_prompt: prompt.trim(),
-        duration,
+        asset_id: asset.asset_id,
+        script: prompt.trim(),
+        voice_id: voiceId,
         aspect_ratio: ratio,
         title,
       });
@@ -230,25 +252,35 @@ export default function CreateVideoClipPage() {
               )}
             </div>
 
-            <div className="rounded-[9px] border border-[var(--border)] bg-[var(--card)] p-4 text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <span className="text-xs font-medium text-[var(--content-title)] sm:text-[13px]">Video Duration</span>
-                <span className="text-xs leading-snug text-[var(--content-title)] sm:text-[13px]">{duration} seconds</span>
-              </div>
-              <input type="range" min={5} max={8} step={1} value={duration} aria-label="Video duration"
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="twin-slider h-2 w-full cursor-pointer appearance-none rounded-full bg-[var(--secondary)]"
-                style={{ ["--pct" as string]: `${((duration - 5) / 3) * 100}%` }} />
-              <div className="mt-2 flex justify-between text-[10px] leading-snug text-[var(--content-caption)] sm:text-[11px]">
-                <span>5s</span>
-                <span>8s</span>
-              </div>
+            <div ref={voiceRef} className="relative rounded-[9px] border border-[var(--border)] bg-[var(--card)] p-4 text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
+              <span className="mb-3 block text-xs font-medium text-[var(--content-title)] sm:text-[13px]">Voice</span>
+              <button type="button" role="combobox" aria-expanded={voiceOpen} aria-label={`Voice: ${voice?.name ?? "none selected"}`}
+                onClick={() => setVoiceOpen((v) => !v)} disabled={!voices.length}
+                className="flex h-10 w-full items-center justify-between gap-2 rounded-[8px] border border-[var(--input)] bg-[var(--background)] px-3 text-left text-[13px] text-[var(--content-title)] shadow-sm outline-none transition-colors hover:bg-[var(--accent)] focus-visible:border-[var(--brand)] disabled:opacity-50">
+                <span className="truncate">{voice ? `${voice.name}${voice.language ? ` · ${voice.language}` : ""}` : voices.length ? "Choose a voice" : "Loading voices…"}</span>
+                <ChevronDown className="size-4 shrink-0 text-[var(--muted-foreground)]" strokeWidth={1.75} aria-hidden />
+              </button>
+              {voiceOpen && (
+                <ul role="listbox" aria-label="Voice" className="absolute left-4 right-4 z-30 mt-1 max-h-64 overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--popover)] p-1 shadow-[var(--shadow-popover)] sm:left-5 sm:right-5">
+                  {voices.map((v) => (
+                    <li key={v.voice_id}>
+                      <button type="button" role="option" aria-selected={v.voice_id === voiceId}
+                        onClick={() => { setVoiceId(v.voice_id); setVoiceOpen(false); }}
+                        className={cn("flex w-full items-center justify-between rounded-[5px] px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-[var(--accent)]", v.voice_id === voiceId && "bg-[var(--composer-chip)] text-[var(--brand)]")}>
+                        <span className="truncate">{v.name}</span>
+                        {v.language && <span className="ml-2 shrink-0 text-[11px] text-[var(--content-caption)]">{v.language}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-2 text-[11px] leading-snug text-[var(--content-caption)]">The person in your picture speaks your text in this voice.</p>
             </div>
 
             <div className="relative">
-              <label htmlFor="video-prompt" className="sr-only">Video prompt</label>
+              <label htmlFor="video-prompt" className="sr-only">Script</label>
               <textarea id="video-prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the video you want to create in detail..."
+                placeholder="Write what the person in the picture should say..."
                 className="flex min-h-[140px] w-full resize-none rounded-[8px] border border-[var(--input)] bg-[var(--background)] px-4 py-3 pb-14 text-base leading-snug text-[var(--content-title)] shadow-sm outline-none transition-[opacity,box-shadow] placeholder:text-[11px] placeholder:leading-snug placeholder:text-[var(--muted-foreground)] focus-visible:border-[var(--brand)] sm:pb-12 sm:text-[13px] sm:placeholder:text-[13px]" />
               <button type="button" disabled
                 className="absolute bottom-3 left-3 right-3 z-20 inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--card)] px-2.5 text-xs font-normal text-[var(--foreground)] shadow-none transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-50 sm:right-auto">
@@ -268,7 +300,7 @@ export default function CreateVideoClipPage() {
 
             {error && <Alert tone="warning" onDismiss={() => setError(null)}>{error}</Alert>}
 
-            <button type="button" onClick={generate} disabled={busy || !file || !prompt.trim()} aria-busy={busy}
+            <button type="button" onClick={generate} disabled={busy || !file || !prompt.trim() || !voiceId} aria-busy={busy}
               className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-[5px] border-0 bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] px-4 py-2 text-xs font-medium text-white shadow-none transition-all hover:brightness-[0.96] active:brightness-[0.92] disabled:pointer-events-none disabled:opacity-50 sm:h-11 sm:text-[13px]">
               <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
               {busy ? "Generating…" : `Generate with ${model.name}`}

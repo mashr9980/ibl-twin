@@ -20,22 +20,32 @@ import {
 
 import { NotificationsPanel } from "@/components/twin/notifications-panel";
 import { ProfileSettingsDialog } from "@/components/twin/profile-settings-dialog";
+import { useTwinPreferences } from "@/hooks/use-twin-preferences";
 import { cn } from "@/lib/utils";
 import { TwinLogo } from "./app-sidebar";
 
 export function ProfileMenu({
   email,
   username,
+  fullName = "",
+  tenantKey,
+  isAdmin = false,
   unread = 0,
   collapsed = false,
   onLogout,
 }: {
   email: string;
   username: string;
+  fullName?: string;
+  tenantKey: string;
+  isAdmin?: boolean;
   unread?: number;
   collapsed?: boolean;
   onLogout: () => void;
 }) {
+  const { prefs } = useTwinPreferences(tenantKey);
+  const label =
+    prefs.showMeAs === "username" ? username || email : prefs.showMeAs === "name" ? fullName || username || email : email || username;
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [view, setView] = useState<"menu" | "notifications">("menu");
@@ -77,7 +87,6 @@ export function ProfileMenu({
     }
   }, [dark]);
 
-  const initial = (username || email || "?").charAt(0).toUpperCase();
 
   const row =
     "flex w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2 py-2 text-[13.5px] text-[var(--content-title)] transition-colors hover:bg-[var(--canvas-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]";
@@ -100,7 +109,7 @@ export function ProfileMenu({
           <img src="/images/user-profile.png" alt="" className="aspect-square size-full object-cover object-center" />
         </span>
         {!collapsed && (
-          <span className="min-w-0 flex-1 truncate text-left text-[14px] font-normal">{email || username}</span>
+          <span className="min-w-0 flex-1 truncate text-left text-[14px] font-normal">{label}</span>
         )}
         {!collapsed && unread > 0 && (
           <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-transparent bg-[#2563EB] px-1.5 py-0 text-[10px] font-semibold leading-none text-white">
@@ -188,6 +197,8 @@ export function ProfileMenu({
         onClose={() => setSettingsOpen(false)}
         username={username}
         email={email}
+        tenantKey={tenantKey}
+        isAdmin={isAdmin}
       />
     </>
   );
