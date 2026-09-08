@@ -14,7 +14,6 @@ import {
   heygenErrorMessage,
 } from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
-import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +40,6 @@ const RATIOS: { value: Ratio; label: string }[] = [
 export default function CreateVideoClipPage() {
   const router = useRouter();
   const credential = useHeygenCredential();
-  const tenant = resolveAppTenant();
   const input = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -97,13 +95,13 @@ export default function CreateVideoClipPage() {
         aspect_ratio: ratio,
         title,
       });
-      rememberVideo(tenant, {
+      await rememberVideo({
         id: video_id,
         title,
         kind: "clip",
         orientation: ratio === "9:16" ? "portrait" : "landscape",
         createdAt: Date.now(),
-      });
+      }).catch(() => {});
       router.push("/videos/my?type=clip");
     } catch (err) {
       setError(heygenErrorMessage(err, "Video generation failed. Please try again."));

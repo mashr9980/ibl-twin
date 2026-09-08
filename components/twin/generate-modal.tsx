@@ -21,7 +21,6 @@ import {
 
 import { createVideo, listHeygenVoices, type HeygenAvatar, type HeygenVoice, type Orientation, heygenErrorMessage } from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
-import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
 import { cn } from "@/lib/utils";
 
@@ -118,14 +117,14 @@ export function GenerateModal({
         orientation: chosen,
         speed,
       });
-      rememberVideo(resolveAppTenant(), {
+      await rememberVideo({
         id: video_id,
         title,
         kind,
         orientation: chosen,
         avatarName: avatar.avatar_name,
         createdAt: Date.now(),
-      });
+      }).catch(() => {});
       onGenerated?.();
       router.push(`/videos/my?type=${kind}`);
     } catch (err) {

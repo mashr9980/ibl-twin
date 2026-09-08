@@ -23,8 +23,7 @@ import {
   waitForLook,
   type HeygenAvatar,
 } from "@/lib/heygen/rest";
-import { getLocalTwin, setLocalTwin } from "@/lib/twin/local-library";
-import { resolveAppTenant } from "@/lib/iblai/tenant";
+import { getTwin, setTwin, type LocalTwin } from "@/lib/twin/local-library";
 import { Alert } from "@/components/twin/alert";
 import { TwinCard } from "@/components/twin/twin-card";
 import { cn } from "@/lib/utils";
@@ -215,8 +214,14 @@ function Dropzone({
 function CreateTwinInner() {
   const router = useRouter();
   const credential = useHeygenCredential();
-  const tenant = resolveAppTenant();
-  const [existing, setExisting] = useState(() => (typeof window === "undefined" ? null : getLocalTwin(tenant)));
+  const [existing, setExisting] = useState<LocalTwin | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getTwin().then((t) => !cancelled && setExisting(t)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [progress, setProgress] = useState<number | null>(null);
   const [stage, setStage] = useState("");
   const [busySource, setBusySource] = useState<"photo" | "video" | null>(null);
@@ -257,7 +262,7 @@ function CreateTwinInner() {
         imageUrl: imageUrl ?? look.image_url ?? asset.url,
         createdAt: Date.now(),
       };
-      setLocalTwin(tenant, twin);
+      await setTwin(twin);
       setExisting(twin);
       // Let the bar reach 100% before the library opens.
       await new Promise((r) => setTimeout(r, 700));
@@ -349,8 +354,8 @@ function CreateTwinInner() {
               showLibraryLink
               onDelete={() => {
                 if (!confirm("Delete your twin? Videos already made with it stay.")) return;
-                setLocalTwin(tenant, null);
                 setExisting(null);
+                void setTwin(null).catch(() => setError("Couldn't delete your twin. Please try again."));
               }}
             />
           )}

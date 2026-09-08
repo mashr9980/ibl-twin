@@ -87,7 +87,7 @@ export function heygenErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof HeygenCredentialMissingError) return "HeyGen integration required. Ask the workspace owner to connect HeyGen.";
   if (err instanceof HeygenFreeLimitError) return "You've used your free videos for this month. Upgrade for unlimited videos.";
   if (err instanceof HeygenCreditsExhaustedError)
-    return "HeyGen doesn't have enough credits for this video. The workspace owner can add credits in HeyGen; a shorter script needs fewer.";
+    return "HeyGen doesn't have enough credits for this. The workspace owner can add credits in HeyGen; a twin costs about 1 credit and a video about 1 credit per minute.";
   if (err instanceof HeygenBusyError) return "HeyGen is busy right now. Please try again in a moment.";
   if (err instanceof HeygenTimeoutError) return "This is taking longer than usual. Please try again in a moment.";
   if (err instanceof HeygenPhotoRejectedError) return "HeyGen couldn't use that picture. Try a clear, front-facing photo of one person.";

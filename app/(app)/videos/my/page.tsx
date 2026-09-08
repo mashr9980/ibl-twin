@@ -12,10 +12,9 @@ import { ShareDialog } from "@/components/twin/share-dialog";
 
 import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
-import { deleteVideo, getVideo, listVideos, type HeygenVideo } from "@/lib/heygen/rest";
-import { forgetVideo, getLocalTwin, listLocalVideos, setLocalTwin, type LocalTwin, type VideoKind } from "@/lib/twin/local-library";
+import { deleteVideo, getVideo, HeygenRequestError, type HeygenVideo } from "@/lib/heygen/rest";
+import { forgetVideo, listVideos as listMyVideos, loadLibrary, setTwin as saveTwin, type LocalTwin, type VideoKind } from "@/lib/twin/local-library";
 import { TwinCard } from "@/components/twin/twin-card";
-import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
 import { cn } from "@/lib/utils";
 
@@ -60,8 +59,7 @@ function isStale(v: HeygenVideo): boolean {
 function MyVideosInner() {
   const params = useSearchParams();
   const credential = useHeygenCredential();
-  const tenant = resolveAppTenant();
-  const [twin, setTwin] = useState<LocalTwin | null>(() => (typeof window === "undefined" ? null : getLocalTwin(tenant)));
+  const [twin, setTwin] = useState<LocalTwin | null>(null);
   const chip = (params.get("type") as Chip | null) ?? "all";
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -72,19 +70,28 @@ function MyVideosInner() {
   const [shareFor, setShareFor] = useState<Row | null>(null);
 
   const load = useCallback(async () => {
-    // The HeyGen key is shared by the whole workspace: show only the videos
-    // made from this browser, not everyone's.
-    const local = new Map(listLocalVideos(tenant).map((v) => [v.id, v]));
-    const { data } = await listVideos({ limit: 100 });
-    setRows(
-      data
-        .filter((v) => local.has(v.id))
-        .map((v) => {
-          const l = local.get(v.id)!;
-          return { ...v, kind: l.kind, localTitle: l.title };
-        }),
+    // The HeyGen key is shared by the whole workspace, so the member's own
+    // library says which videos are theirs; HeyGen is asked about just those.
+    const library = await loadLibrary();
+    setTwin(library.twin);
+    const mine = await Promise.all(
+      library.videos.map(async (l) => {
+        try {
+          const v = await getVideo(l.id);
+          return { ...v, kind: l.kind, localTitle: l.title } as Row;
+        } catch (err) {
+          // Gone from HeyGen (deleted there): drop it. Anything else: keep the
+          // record and show it as still rendering until the next poll.
+          if (err instanceof HeygenRequestError && err.status === 404) {
+            void forgetVideo(l.id);
+            return null;
+          }
+          return { id: l.id, title: l.title, status: "pending", created_at: l.createdAt, kind: l.kind, localTitle: l.title } as Row;
+        }
+      }),
     );
-  }, [tenant]);
+    setRows(mine.filter((r): r is Row => r !== null));
+  }, []);
 
   useEffect(() => {
     if (credential !== "ok") {
@@ -120,7 +127,7 @@ function MyVideosInner() {
   async function remove(row: Row) {
     if (!confirm("Delete this video?")) return;
     setRows((p) => p.filter((r) => r.id !== row.id));
-    forgetVideo(tenant, row.id);
+    void forgetVideo(row.id);
     await deleteVideo(row.id).catch(() => setError("Couldn't delete that video."));
   }
 
@@ -188,8 +195,8 @@ function MyVideosInner() {
               onGenerated={() => void load()}
               onDelete={() => {
                 if (!confirm("Delete your twin? Videos already made with it stay.")) return;
-                setLocalTwin(tenant, null);
                 setTwin(null);
+                void saveTwin(null).catch(() => setError("Couldn't delete your twin. Please try again."));
               }}
             />
           )}

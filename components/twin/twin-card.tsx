@@ -9,7 +9,7 @@ import { Clapperboard, Trash2 } from "lucide-react";
 
 import { GenerateModal } from "@/components/twin/generate-modal";
 import { getPhotoAvatarLook, type HeygenAvatar } from "@/lib/heygen/rest";
-import type { LocalTwin } from "@/lib/twin/local-library";
+import type { LocalTwin } from "@/lib/twin/library-types";
 
 const OUTLINE_BTN =
   "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-4 text-[13px] font-normal text-[var(--content-title)] shadow-sm transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-50";
