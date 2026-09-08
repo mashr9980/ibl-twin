@@ -288,7 +288,14 @@ export async function getPhotoAvatarLook(groupId: string): Promise<HeygenPhotoAv
 }
 
 export async function trainPhotoAvatarGroup(groupId: string): Promise<void> {
-  await request("/v2/photo_avatar/train", { method: "POST", body: { group_id: groupId } });
+  try {
+    await request("/v2/photo_avatar/train", { method: "POST", body: { group_id: groupId } });
+  } catch (err) {
+    // HeyGen has answered 400 "Training already in progress" to the very request
+    // that started the training; the twin is training either way.
+    if (err instanceof Error && /already in progress/i.test(err.message)) return;
+    throw err;
+  }
 }
 
 /** HeyGen's training state for a twin: "pending", "ready" or "failed" (anything else reads as pending). */

@@ -2,9 +2,10 @@ import "./helpers/browser-stub";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createVideo, getTwinTrainingStatus } from "@/lib/heygen/rest";
+import { createVideo, getTwinTrainingStatus, trainPhotoAvatarGroup } from "@/lib/heygen/rest";
 
 const calls: { url: string; init: RequestInit }[] = [];
+let trainAnswer: { status: number; body: unknown } = { status: 200, body: { data: null } };
 
 beforeEach(() => {
   calls.length = 0;
@@ -13,6 +14,8 @@ beforeEach(() => {
   (globalThis as any).dispatchEvent = () => true;
   vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
     calls.push({ url, init });
+    if (url.endsWith("/v2/photo_avatar/train"))
+      return new Response(JSON.stringify(trainAnswer.body), { status: trainAnswer.status });
     const body = url.includes("train/status")
       ? { data: { status: "ready" } }
       : { data: { video_id: "vid1" } };
@@ -43,5 +46,16 @@ describe("getTwinTrainingStatus", () => {
   it("reads HeyGen's training state for the group", async () => {
     expect(await getTwinTrainingStatus("g1")).toBe("ready");
     expect(calls[0].url).toContain("/v2/photo_avatar/train/status/g1");
+  });
+});
+
+describe("trainPhotoAvatarGroup", () => {
+  it("treats HeyGen's 'already in progress' answer as started", async () => {
+    trainAnswer = { status: 400, body: { data: null, error: { code: "invalid_parameter", message: "Training already in progress" } } };
+    await expect(trainPhotoAvatarGroup("g1")).resolves.toBeUndefined();
+  });
+  it("still surfaces other refusals", async () => {
+    trainAnswer = { status: 400, body: { error: { code: "invalid_parameter", message: "Group not found" } } };
+    await expect(trainPhotoAvatarGroup("g1")).rejects.toThrow(/Group not found/);
   });
 });
