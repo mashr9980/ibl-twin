@@ -100,7 +100,7 @@ export function ProfileMenu({
           <img src="/images/user-profile.png" alt="" className="aspect-square size-full object-cover object-center" />
         </span>
         {!collapsed && (
-          <span className="min-w-0 flex-1 truncate text-left text-[14px] font-normal">{username || email}</span>
+          <span className="min-w-0 flex-1 truncate text-left text-[14px] font-normal">{email || username}</span>
         )}
         {!collapsed && unread > 0 && (
           <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-transparent bg-[#2563EB] px-1.5 py-0 text-[10px] font-semibold leading-none text-white">
