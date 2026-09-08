@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Building2, Code, CreditCard, History, Palette, Puzzle,
   Settings as SettingsIcon, Shield, Sparkles, User, X,
@@ -19,9 +20,11 @@ import { ApiSection } from "@/components/twin/settings/api-section";
 import { PersonalizationSection } from "@/components/twin/settings/personalization-section";
 import { PreferencesSection } from "@/components/twin/settings/preferences-section";
 import { UsageSection } from "@/components/twin/settings/usage-section";
-import {
-  BillingSection, ConnectionsSection, GeneralSection, SecuritySection, SkillsSection,
-} from "@/components/twin/settings/workspace-sections";
+import { BillingSection } from "@/components/twin/settings/billing-section";
+import { ConnectionsSection } from "@/components/twin/settings/connections-section";
+import { GeneralSection } from "@/components/twin/settings/general-section";
+import { SecuritySection } from "@/components/twin/settings/security-section";
+import { SkillsSection } from "@/components/twin/settings/skills-section";
 import { cn } from "@/lib/utils";
 
 type Section =
@@ -77,7 +80,7 @@ export function ProfileSettingsDialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   const allowed = (item: NavItem) => !item.adminOnly || isAdmin;
   const all = [...PROFILE_NAV, ...WORKSPACE_NAV];
@@ -113,16 +116,18 @@ export function ProfileSettingsDialog({
       case "preferences": return <PreferencesSection tenantKey={tenantKey} />;
       case "personalization": return <PersonalizationSection tenantKey={tenantKey} />;
       case "general": return <GeneralSection tenantKey={tenantKey} />;
-      case "billing": return <BillingSection tenantKey={tenantKey} username={username} email={email} />;
+      case "billing": return <BillingSection tenantKey={tenantKey} isAdmin={isAdmin} onClose={onClose} />;
       case "usage": return <UsageSection isAdmin={isAdmin} onClose={onClose} />;
-      case "security": return <SecuritySection tenantKey={tenantKey} username={username} />;
+      case "security": return <SecuritySection onClose={onClose} />;
       case "api": return <ApiSection tenantKey={tenantKey} />;
-      case "skills": return <SkillsSection tenantKey={tenantKey} username={username} />;
-      case "connections": return <ConnectionsSection tenantKey={tenantKey} username={username} />;
+      case "skills": return <SkillsSection onNavigate={setSection} />;
+      case "connections": return <ConnectionsSection />;
     }
   })();
 
-  return (
+  // Rendered on <body>: the mobile sidebar is a transformed element, which
+  // would otherwise become the containing block for this fixed overlay.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0" />
 
@@ -130,7 +135,7 @@ export function ProfileSettingsDialog({
         <h2 id="settings-title" className="sr-only">Profile Settings</h2>
         <p className="sr-only">Manage your account and workspace settings</p>
 
-        <div className="flex h-full min-h-0 flex-1 flex-col sm:flex-row">
+        <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col sm:flex-row">
           <aside className="hidden min-h-0 flex-col overflow-y-auto border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] sm:flex sm:h-full sm:w-[240px] sm:shrink-0 sm:border-r sm:px-4 sm:py-5 lg:w-[260px]">
             <div className="space-y-5">
               <div className="space-y-1">
@@ -187,6 +192,7 @@ export function ProfileSettingsDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

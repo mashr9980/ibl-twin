@@ -20,7 +20,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  const [fullName, setFullName] = useState("");
   const [tenantKey, setTenantKey] = useState("");
   useEffect(() => {
     if (!drawerOpen) return;
@@ -36,7 +35,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const u = JSON.parse(raw);
         setUsername(u.user_nicename ?? u.username ?? "");
         setEmail(u.user_email ?? u.email ?? "");
-        setFullName((u.user_fullname ?? u.user_display_name ?? "").trim());
       }
     } catch {
       /* unauthenticated render — providers redirect before this matters */
@@ -60,7 +58,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <ProfileMenu
       email={email}
       username={username}
-      fullName={fullName}
       tenantKey={tenantKey}
       isAdmin={isAdmin}
       unread={0}

@@ -20,14 +20,12 @@ import {
 
 import { NotificationsPanel } from "@/components/twin/notifications-panel";
 import { ProfileSettingsDialog } from "@/components/twin/profile-settings-dialog";
-import { useTwinPreferences } from "@/hooks/use-twin-preferences";
 import { cn } from "@/lib/utils";
 import { TwinLogo } from "./app-sidebar";
 
 export function ProfileMenu({
   email,
   username,
-  fullName = "",
   tenantKey,
   isAdmin = false,
   unread = 0,
@@ -36,16 +34,13 @@ export function ProfileMenu({
 }: {
   email: string;
   username: string;
-  fullName?: string;
   tenantKey: string;
   isAdmin?: boolean;
   unread?: number;
   collapsed?: boolean;
   onLogout: () => void;
 }) {
-  const { prefs } = useTwinPreferences(tenantKey);
-  const label =
-    prefs.showMeAs === "username" ? username || email : prefs.showMeAs === "name" ? fullName || username || email : email || username;
+  const label = email || username;
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [view, setView] = useState<"menu" | "notifications">("menu");

@@ -19,18 +19,44 @@ export const LANGUAGES = [
 
 export type Language = (typeof LANGUAGES)[number]["value"];
 export type Theme = "light" | "dark" | "system";
-export type ShowMeAs = "email" | "username" | "name";
+
+/** What the member told us about themselves, for scripts and styling. */
+export interface TwinProfile {
+  role: string;
+  industry: string;
+  audience: string;
+  tone: string;
+  topics: string;
+}
+
+export interface TwinBrand {
+  primary: string;
+  accent: string;
+  font: string;
+  voice: string;
+}
+
+export interface GlossaryTerm {
+  term: string;
+  meaning: string;
+}
 
 export interface TwinPreferences {
   theme: Theme;
   language: Language;
-  showMeAs: ShowMeAs;
+  profile: TwinProfile | null;
+  memory: string[];
+  brand: TwinBrand | null;
+  glossary: GlossaryTerm[];
 }
 
 export const DEFAULT_PREFERENCES: TwinPreferences = {
   theme: "system",
   language: "en",
-  showMeAs: "email",
+  profile: null,
+  memory: [],
+  brand: null,
+  glossary: [],
 };
 
 type Metadata = Record<string, unknown> & { twin?: Partial<TwinPreferences> };
