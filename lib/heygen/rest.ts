@@ -5,6 +5,7 @@
  * resolves the tenant's HeyGen key server-side. The browser only ever
  * presents its ibl.ai DM token, never a provider key.
  */
+import { HEYGEN_CREDITS_EVENT, isInsufficientCredit } from "@/lib/heygen/credential";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 
 const API_BASE = "/api/heygen";
@@ -15,6 +16,23 @@ export class HeygenCredentialMissingError extends Error {
     super("heygen_credential_missing");
     this.name = "HeygenCredentialMissingError";
   }
+}
+
+/** The workspace's HeyGen balance is used up; the banner is told at once. */
+export class HeygenCreditsExhaustedError extends Error {
+  constructor() {
+    super("heygen_credits_exhausted");
+    this.name = "HeygenCreditsExhaustedError";
+  }
+}
+
+async function failure(path: string, res: Response): Promise<Error> {
+  const text = await res.text().catch(() => "");
+  if (isInsufficientCredit(text)) {
+    window.dispatchEvent(new Event(HEYGEN_CREDITS_EVENT));
+    return new HeygenCreditsExhaustedError();
+  }
+  return new Error(`heygen ${path}: ${res.status} ${text.slice(0, 200)}`);
 }
 
 function authHeaders(): Record<string, string> {
@@ -45,10 +63,7 @@ async function request<T>(
 
   const res = await fetch(url.toString(), { method: init.method ?? "GET", headers, body });
   if (res.status === 424) throw new HeygenCredentialMissingError();
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`heygen ${path}: ${res.status} ${text.slice(0, 200)}`);
-  }
+  if (!res.ok) throw await failure(path, res);
   return (await res.json()) as T;
 }
 
@@ -205,10 +220,7 @@ export async function uploadHeygenAsset(file: File | Blob): Promise<HeygenUpload
     body: file,
   });
   if (res.status === 424) throw new HeygenCredentialMissingError();
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`heygen /v1/asset: ${res.status} ${text.slice(0, 200)}`);
-  }
+  if (!res.ok) throw await failure("/v1/asset", res);
   return unwrap(await res.json());
 }
 

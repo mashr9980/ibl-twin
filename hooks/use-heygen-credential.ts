@@ -2,20 +2,23 @@
 
 import { useEffect, useState } from "react";
 
+import { HEYGEN_CREDITS_EVENT, type HeygenCredits } from "@/lib/heygen/credential";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 
 export type HeygenCredentialState = "checking" | "ok" | "missing";
 
-/** One probe per session, shared by every component that asks. */
-let cached: Promise<HeygenCredentialState> | null = null;
+type Status = { state: HeygenCredentialState; credits: HeygenCredits | null };
 
-function probe(): Promise<HeygenCredentialState> {
+/** One probe per session, shared by every component that asks; re-asked when a call ran out of credits. */
+let cached: Promise<Status> | null = null;
+
+function probe(): Promise<Status> {
   if (cached) return cached;
-  cached = (async (): Promise<HeygenCredentialState> => {
-    if (typeof window === "undefined") return "missing";
+  cached = (async (): Promise<Status> => {
+    if (typeof window === "undefined") return { state: "missing", credits: null };
     const token = localStorage.getItem("dm_token");
     const tenant = resolveAppTenant();
-    if (!token || !tenant) return "missing";
+    if (!token || !tenant) return { state: "missing", credits: null };
 
     // Ask our own server, not the platform: the platform reports a masked
     // credential as present, which would unlock the UI for calls that then
@@ -25,24 +28,43 @@ function probe(): Promise<HeygenCredentialState> {
         headers: { Authorization: `Token ${token}`, "X-Platform": tenant },
         cache: "no-store",
       });
-      if (!res.ok) return "missing";
-      const data = (await res.json()) as { ok?: boolean };
-      return data.ok ? "ok" : "missing";
+      if (!res.ok) return { state: "missing", credits: null };
+      const data = (await res.json()) as { ok?: boolean; credits?: HeygenCredits | null };
+      return { state: data.ok ? "ok" : "missing", credits: data.credits ?? null };
     } catch {
-      return "missing";
+      return { state: "missing", credits: null };
     }
   })();
   return cached;
 }
 
-export function useHeygenCredential(): HeygenCredentialState {
-  const [state, setState] = useState<HeygenCredentialState>("checking");
+function useHeygenStatus(): Status {
+  const [status, setStatus] = useState<Status>({ state: "checking", credits: null });
   useEffect(() => {
     let cancelled = false;
-    probe().then((s) => !cancelled && setState(s));
+    const ask = () => {
+      void probe().then((s) => !cancelled && setStatus(s));
+    };
+    ask();
+    // A call just failed for lack of credits: the balance is stale, ask again.
+    const refresh = () => {
+      cached = null;
+      ask();
+    };
+    window.addEventListener(HEYGEN_CREDITS_EVENT, refresh);
     return () => {
       cancelled = true;
+      window.removeEventListener(HEYGEN_CREDITS_EVENT, refresh);
     };
   }, []);
-  return state;
+  return status;
+}
+
+export function useHeygenCredential(): HeygenCredentialState {
+  return useHeygenStatus().state;
+}
+
+/** The workspace's HeyGen balance as the server last saw it; null while unknown. */
+export function useHeygenCredits(): HeygenCredits | null {
+  return useHeygenStatus().credits;
 }

@@ -8,6 +8,7 @@ import { ProfileMenu } from "@/components/twin/profile-menu";
 import { cn } from "@/lib/utils";
 import { AppFooter } from "@/components/twin/app-footer";
 import { SetupBanner } from "@/components/twin/setup-banner";
+import { CreditsBanner } from "@/components/twin/credits-banner";
 import { handleLogout, saveReturnPath } from "@/lib/iblai/auth-utils";
 import { PAYWALL_PATH, dropTenant, isTenantAdmin, resolveAppTenant } from "@/lib/iblai/tenant";
 import { checkMemberAccess, memberAccessSettled } from "@/lib/paywall-client";
@@ -120,6 +121,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <main className="min-h-0 flex-1 overflow-y-auto bg-[var(--canvas-muted)]">
           <SetupBanner isAdmin={isAdmin} />
+          <CreditsBanner isAdmin={isAdmin} />
           {children}
         </main>
 

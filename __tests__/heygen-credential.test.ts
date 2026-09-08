@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractApiKey } from "@/lib/heygen/credential";
+import { creditsFromQuota, extractApiKey, isInsufficientCredit } from "@/lib/heygen/credential";
 
 /**
  * The ai-account credential endpoint has no single documented envelope —
@@ -78,5 +78,30 @@ describe("masked credential detection", () => {
     expect(isUsableKey("short")).toBe(false);
     expect(isUsableKey(null)).toBe(false);
     expect(isUsableKey(undefined)).toBe(false);
+  });
+});
+
+describe("creditsFromQuota", () => {
+  it("counts whole credits from HeyGen's sixtieths and flags less than one as low", () => {
+    expect(creditsFromQuota(358)).toEqual({ remaining: 5, low: false });
+    expect(creditsFromQuota(60)).toEqual({ remaining: 1, low: false });
+    expect(creditsFromQuota(58)).toEqual({ remaining: 0, low: true });
+    expect(creditsFromQuota(0)).toEqual({ remaining: 0, low: true });
+  });
+
+  it("is null when the balance could not be read", () => {
+    expect(creditsFromQuota(null)).toBeNull();
+    expect(creditsFromQuota(undefined)).toBeNull();
+    expect(creditsFromQuota(Number.NaN)).toBeNull();
+  });
+});
+
+describe("isInsufficientCredit", () => {
+  it("recognises HeyGen's exhausted-balance answer and nothing else", () => {
+    expect(
+      isInsufficientCredit('{"error": {"code": "insufficient_credit", "message": "Insufficient credit."}}'),
+    ).toBe(true);
+    expect(isInsufficientCredit('{"error": {"code": "invalid_image"}}')).toBe(false);
+    expect(isInsufficientCredit("")).toBe(false);
   });
 });

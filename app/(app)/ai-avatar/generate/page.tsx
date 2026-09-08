@@ -21,6 +21,7 @@ import {
   finalizeAndTrain,
   uploadHeygenAsset,
   HeygenCredentialMissingError,
+  HeygenCreditsExhaustedError,
   type HeygenAvatar,
 } from "@/lib/heygen/rest";
 import { getLocalTwin, setLocalTwin } from "@/lib/twin/local-library";
@@ -251,6 +252,7 @@ function CreateTwinInner() {
       setBusySource(null);
       setStage("");
       if (err instanceof HeygenCredentialMissingError) setError("HeyGen integration required.");
+      else if (err instanceof HeygenCreditsExhaustedError) setError("HeyGen credits are used up, so nothing can be generated right now. The workspace owner can add credits in HeyGen.");
       else if (err instanceof Error && /413|too large/i.test(err.message)) setError("File too large. Please use a smaller file.");
       else setError(`Upload failed${err instanceof Error && err.message ? ` (${err.message.slice(0, 80)})` : ""}.`);
     }
@@ -326,6 +328,11 @@ function CreateTwinInner() {
             <Dropzone progress={busySource === "photo" ? progress : null} Icon={ImageIcon} title="Start with a photo" helper="Supported formats: JPG, PNG, GIF, WEBP. Max size: 10MB." accept="image/jpeg,image/png,image/gif,image/webp" buttonLabel="Upload Photo" onFile={onPhoto} onUrl={onUrl} disabled={busy} />
             <Dropzone progress={busySource === "video" ? progress : null} Icon={VideoIcon} title="Start with video" badge="Most realistic" helper="Supported formats: MP4, MOV, WEBM. Max size: 100MB." accept="video/mp4,video/quicktime,video/webm" buttonLabel="Upload Video" onFile={onVideo} disabled={busy} />
           </div>
+          {error && (
+            <Alert className="mt-4" onDismiss={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
 
 
           <section className="mt-10 pb-8 sm:mt-12 sm:pb-12">

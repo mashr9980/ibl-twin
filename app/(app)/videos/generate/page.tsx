@@ -8,7 +8,12 @@ import { Check, ChevronDown, ImageIcon, Link as LinkIcon, Sparkles, Upload } fro
 
 import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
-import { createVideoClip, uploadHeygenAsset, HeygenCredentialMissingError } from "@/lib/heygen/rest";
+import {
+  createVideoClip,
+  uploadHeygenAsset,
+  HeygenCredentialMissingError,
+  HeygenCreditsExhaustedError,
+} from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
@@ -102,7 +107,13 @@ export default function CreateVideoClipPage() {
       });
       router.push("/videos/my?type=clip");
     } catch (err) {
-      setError(err instanceof HeygenCredentialMissingError ? "HeyGen integration required." : "Video generation failed. Please try again.");
+      setError(
+        err instanceof HeygenCredentialMissingError
+          ? "HeyGen integration required."
+          : err instanceof HeygenCreditsExhaustedError
+            ? "HeyGen credits are used up, so nothing can be generated right now. The workspace owner can add credits in HeyGen."
+            : "Video generation failed. Please try again.",
+      );
       setBusy(false);
     }
   }

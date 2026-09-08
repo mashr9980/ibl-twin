@@ -67,3 +67,26 @@ export function looksMasked(key: string): boolean {
 export function isUsableKey(key: string | null | undefined): key is string {
   return typeof key === "string" && key.trim().length >= 16 && !looksMasked(key);
 }
+
+// HeyGen reports its API balance in sixtieths of a credit. Below one credit
+// nothing can be generated, and HeyGen answers `insufficient_credit`.
+const QUOTA_PER_CREDIT = 60;
+
+export type HeygenCredits = {
+  /** Whole credits left, rounded down. */
+  remaining: number;
+  /** Too low to generate anything. */
+  low: boolean;
+};
+
+export function creditsFromQuota(quota: number | null | undefined): HeygenCredits | null {
+  if (typeof quota !== "number" || !Number.isFinite(quota)) return null;
+  const remaining = Math.max(0, Math.floor(quota / QUOTA_PER_CREDIT));
+  return { remaining, low: quota < QUOTA_PER_CREDIT };
+}
+
+/** HeyGen's own words for an exhausted balance, anywhere in an error body. */
+export const isInsufficientCredit = (text: string) => /insufficient_credit/i.test(text);
+
+/** Fired in the browser when a call just failed for lack of credits. */
+export const HEYGEN_CREDITS_EVENT = "heygen:credits";
