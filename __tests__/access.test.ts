@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   classifyAuthFailure,
-  fetchPlatformAccessConfig,
+  isMembershipNotice,
   isNoticeCode,
   loginNoticeUrl,
 } from "@/lib/iblai/access";
@@ -31,7 +31,7 @@ describe("classifyAuthFailure", () => {
     // set directly by handleTenantSwitch, never parsed from an SDK string
     expect(isNoticeCode("other_workspace")).toBe(true);
     expect(loginNoticeUrl("other_workspace", "fayyaz@ibleducation.com")).toBe(
-      "/login?notice=other_workspace&email=fayyaz%40ibleducation.com",
+      "/join?notice=other_workspace&email=fayyaz%40ibleducation.com",
     );
   });
 
@@ -55,53 +55,20 @@ describe("isNoticeCode", () => {
 describe("loginNoticeUrl", () => {
   it("encodes the email so it survives the round trip", () => {
     expect(loginNoticeUrl("no_access", "a+b@example.com")).toBe(
-      "/login?notice=no_access&email=a%2Bb%40example.com",
+      "/join?notice=no_access&email=a%2Bb%40example.com",
     );
   });
 
   it("omits the email when there is none", () => {
-    expect(loginNoticeUrl("session_expired")).toBe("/login?notice=session_expired");
+    expect(loginNoticeUrl("session_expired")).toBe("/join?notice=session_expired");
   });
 });
 
-describe("fetchPlatformAccessConfig", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("reports invite-only when self linking is off", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ platform_key: "t", allow_self_linking: false }),
-      }),
-    );
-    expect(await fetchPlatformAccessConfig("https://api.iblai.app/dm", "t")).toEqual({
-      allowSelfLinking: false,
-    });
-  });
-
-  it("reports open when self linking is on", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ allow_self_linking: true }),
-      }),
-    );
-    expect(await fetchPlatformAccessConfig("https://api.iblai.app/dm", "t")).toEqual({
-      allowSelfLinking: true,
-    });
-  });
-
-  it("returns null instead of throwing when the endpoint fails", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    expect(await fetchPlatformAccessConfig("https://api.iblai.app/dm", "t")).toBeNull();
-  });
-
-  it("does not call the network without a tenant", async () => {
-    const spy = vi.fn();
-    vi.stubGlobal("fetch", spy);
-    expect(await fetchPlatformAccessConfig("https://api.iblai.app/dm", "")).toBeNull();
-    expect(spy).not.toHaveBeenCalled();
+describe("isMembershipNotice", () => {
+  it("separates 'not a member' (the paywall's case) from session problems", () => {
+    expect(isMembershipNotice("no_access")).toBe(true);
+    expect(isMembershipNotice("other_workspace")).toBe(true);
+    expect(isMembershipNotice("session_expired")).toBe(false);
+    expect(isMembershipNotice("error")).toBe(false);
   });
 });

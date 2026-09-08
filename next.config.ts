@@ -44,6 +44,9 @@ const reactReduxDir = dedup("react-redux");
 if (reactReduxDir) resolveAliases["react-redux"] = reactReduxDir;
 
 const nextConfig: NextConfig = {
+  // The access screen moved from /login to /join; old links (and Stripe
+  // sessions minted before the move) still land in the right place.
+  redirects: async () => [{ source: "/login", destination: "/join", permanent: false }],
   // The ibl SDK logs the raw JWT and the entire localStorage — three tokens
   // plus the user's email — on every page load. Harmless in dev, a session
   // disclosure in production. Keep error/warn so real failures still surface.

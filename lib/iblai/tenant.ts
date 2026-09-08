@@ -1,16 +1,5 @@
-
-/**
- * Tenant resolution for ibl.ai apps.
- *
- * Priority:
- *   1. app_tenant localStorage — highest priority (set on tenant switch)
- *   2. NEXT_PUBLIC_MAIN_TENANT_KEY env var — default when app_tenant is empty
- *   3. tenant localStorage — fallback (set by SDK TenantProvider)
- *
- * When app_tenant is empty, it is initialized from the env var so that
- * subsequent reads are fast. When the user switches tenant, app_tenant
- * is updated to the new tenant key.
- */
+// Single-tenant app: the tenant is NEXT_PUBLIC_MAIN_TENANT_KEY, mirrored to
+// localStorage (`app_tenant`); env always wins.
 
 import config from "@/lib/iblai/config";
 
@@ -24,43 +13,33 @@ const PLACEHOLDER_PLATFORMS = new Set([
   "",
 ]);
 
-/**
- * Resolve the current tenant key.
- *
- * Checks app_tenant first (persists across tenant switches), falls back
- * to the env var, then to the SDK's tenant value.
- */
 export function resolveAppTenant(): string {
-  if (typeof window === "undefined") return "";
+  if (typeof window === "undefined") {
+    const envOnly = config.mainTenantKey();
+    return envOnly && !PLACEHOLDER_PLATFORMS.has(envOnly) ? envOnly : "";
+  }
 
-  // 1. app_tenant (highest priority — set by tenant switch or previous resolve)
-  const appTenant = localStorage.getItem("app_tenant");
-  if (appTenant) return appTenant;
-
-  // 2. NEXT_PUBLIC_MAIN_TENANT_KEY (default — initialize app_tenant from it)
   const envTenant = config.mainTenantKey();
   if (envTenant && !PLACEHOLDER_PLATFORMS.has(envTenant)) {
-    localStorage.setItem("app_tenant", envTenant);
+    try {
+      if (localStorage.getItem("app_tenant") !== envTenant) {
+        localStorage.setItem("app_tenant", envTenant);
+      }
+    } catch {
+      /* private mode */
+    }
     return envTenant;
   }
 
-  // 3. tenant (set by SDK TenantProvider)
-  const sdkTenant = localStorage.getItem("tenant");
-  if (sdkTenant) {
-    localStorage.setItem("app_tenant", sdkTenant);
-    return sdkTenant;
+  try {
+    const stored = localStorage.getItem("app_tenant") || localStorage.getItem("tenant") || "";
+    return PLACEHOLDER_PLATFORMS.has(stored) ? "" : stored;
+  } catch {
+    return "";
   }
-
-  return "";
 }
 
-/**
- * Check if the SDK's current tenant matches the app's resolved tenant.
- *
- * If they differ, redirect to the auth SPA to re-login for the correct
- * tenant. Returns `true` if a redirect was triggered (caller should stop
- * rendering).
- */
+/** Another ibl.ai app on this origin left a different `tenant` behind: re-pin, and a non-member goes to the paywall. */
 export function checkTenantMismatch(): boolean {
   if (typeof window === "undefined") return false;
 
@@ -68,14 +47,44 @@ export function checkTenantMismatch(): boolean {
   const sdkTenant = localStorage.getItem("tenant") ?? "";
 
   if (appTenant && sdkTenant && sdkTenant !== appTenant) {
-    // The session resolved to a platform this app does not serve. Sending the
-    // user back to sign in just repeats it, so explain instead.
-    import("./access").then(({ loginNoticeUrl, currentUserEmail }) => {
-      const target = loginNoticeUrl("other_workspace", currentUserEmail());
-      localStorage.clear();
-      window.location.replace(target);
-    });
-    return true;
+    localStorage.setItem("tenant", appTenant);
+    localStorage.setItem("current_tenant", JSON.stringify({ key: appTenant }));
+    if (!isTenantMember(readTenants(), appTenant)) {
+      window.location.replace(PAYWALL_PATH);
+      return true;
+    }
   }
   return false;
+}
+
+export type TenantEntry = { key: string; is_admin?: boolean; [k: string]: unknown };
+
+export function readTenants(): TenantEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem("tenants") ?? "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export const isTenantMember = (tenants: TenantEntry[], key: string) =>
+  !!key && tenants.some((t) => t?.key === key);
+
+export function dropTenant(key: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("tenants", JSON.stringify(readTenants().filter((t) => t?.key !== key)));
+}
+
+/** The access screen: paywall, checkout return, and the hand-off to the Auth SPA. */
+export const PAYWALL_PATH = "/join";
+
+export function paywallEntry({ member }: { member: boolean }): string | null {
+  return member ? null : PAYWALL_PATH;
+}
+
+/** From the `tenants` list the sign-in stored, not the SDK's `useIsAdmin()`. */
+export function isTenantAdmin(): boolean {
+  return !!readTenants().find((t) => t.key === resolveAppTenant())?.is_admin;
 }

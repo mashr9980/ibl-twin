@@ -22,7 +22,7 @@ export function LegalPage({
     <div className="min-h-screen bg-[var(--background)]">
       <header className="sticky top-0 z-50 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--card)_95%,transparent)] backdrop-blur">
         <div className="mx-auto flex w-full max-w-4xl items-center px-6 py-4 sm:px-8">
-          <Link href="/login" className="inline-flex items-center transition-opacity hover:opacity-90">
+          <Link href="/join" className="inline-flex items-center transition-opacity hover:opacity-90">
             <span
               className="logo-section logo-section--custom"
               style={

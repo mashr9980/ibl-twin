@@ -6,6 +6,7 @@ import { Account } from "@iblai/iblai-js/web-containers/next";
 import config from "@/lib/iblai/config";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { InviteDialog } from "@/components/twin/invite-dialog";
+import { PaymentsSettings } from "@/components/twin/payments-settings";
 import { useRbacPermissions } from "@/hooks/use-rbac-permissions";
 
 export default function AccountPage() {
@@ -55,6 +56,11 @@ export default function AccountPage() {
 
   return (
     <div className="mx-auto w-full flex-1 overflow-auto px-4 py-8 md:w-[75vw] md:px-0">
+      {isAdmin && (
+        <div className="mb-6">
+          <PaymentsSettings tenantKey={tenantKey} />
+        </div>
+      )}
       <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden">
         <Account
           tenant={tenantKey}

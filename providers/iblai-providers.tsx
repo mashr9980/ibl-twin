@@ -1,81 +1,70 @@
 "use client";
 
-// Side-effect import, kept first: silences the SDK's token logging in
-// production before any of it can run.
+// Kept first: silences the SDK's token logging in production.
 import "@/lib/twin/silence-console";
-
-/**
- * ibl.ai Provider wrapper.
- *
- * Wrap your root layout children with <IblaiProviders> to get:
- *  - Redux store (RTK Query for IBL APIs)
- *  - AuthProvider  (SSO redirect, JWT validation, cross-SPA sync)
- *  - TenantProvider (multi-tenant routing)
- *
- * Usage in app/layout.tsx:
- *
- *   import { IblaiProviders } from "@/providers/iblai-providers";
- *   export default function RootLayout({ children }) {
- *     return <html><body><IblaiProviders>{children}</IblaiProviders></body></html>;
- *   }
- */
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Provider as ReduxProvider } from "react-redux";
 import { usePathname } from "next/navigation";
+import { initializeDataLayer, type TokenResponse } from "@iblai/iblai-js/data-layer";
 import {
-  initializeDataLayer,
-  type TokenResponse,
-} from "@iblai/iblai-js/data-layer";
-import { AuthProvider, TenantProvider, updateRbacPermissions } from "@iblai/iblai-js/web-utils";
+  AuthProvider,
+  TenantProvider,
+  syncAuthToCookies,
+  updateRbacPermissions,
+} from "@iblai/iblai-js/web-utils";
 
 import { iblaiStore } from "@/store/iblai-store";
 import { LocalStorageService } from "@/lib/iblai/storage-service";
 import config from "@/lib/iblai/config";
-import { resolveAppTenant, checkTenantMismatch } from "@/lib/iblai/tenant";
-import { redirectToAuthSpa } from "@/lib/iblai/auth-utils";
 import {
-  attemptAutoAccess,
-  beginRecovery,
-  endRecovery,
-  recoverySucceeded,
+  PAYWALL_PATH,
+  checkTenantMismatch,
+  isTenantMember,
+  readTenants,
+  resolveAppTenant,
+} from "@/lib/iblai/tenant";
+import { redirectToAuthSpa, saveReturnPath } from "@/lib/iblai/auth-utils";
+import {
   classifyAuthFailure,
+  clearFailedTenantJoin,
   currentUserEmail,
+  hasFailedTenantJoin,
+  isMembershipNotice,
   loginNoticeUrl,
   type NoticeCode,
 } from "@/lib/iblai/access";
 
 const storageService = LocalStorageService.getInstance();
 
-/** Routes that do NOT require authentication. */
+/** Routes that render without a session. */
 const PUBLIC_ROUTES = new Map<RegExp, () => Promise<boolean>>([
   [new RegExp("^/sso-login"), async () => false],
-  // The sign-in screen must render for signed-out visitors instead of
-  // bouncing them straight to the Auth SPA.
-  [new RegExp("^/login"), async () => false],
-  // Twin links these from the sign-in footer, so they have to open without a
-  // session; sending a signed-out reader to the Auth SPA loses the page.
+  [new RegExp("^/join"), async () => false],
   [new RegExp("^/(privacy|terms|faq)"), async () => false],
 ]);
 
+const isPublicPath = (pathname: string) =>
+  pathname.startsWith("/sso-login") ||
+  pathname.startsWith("/join") ||
+  pathname.startsWith("/privacy") ||
+  pathname.startsWith("/terms") ||
+  pathname.startsWith("/faq");
+
+/**
+ * Members of the tenant get in, nobody else. Signed out → the Auth SPA.
+ * Signed in but not a member → the paywall, where paying makes them a member.
+ */
 export function IblaiProviders({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  // initializeDataLayer MUST be called synchronously before any children
-  // render so that Config.lmsUrl / Config.dmUrl are set before RTK Query
-  // hooks (e.g. inside the Profile component) fire their first queries.
-  // useState initializer runs during the render cycle, not after it.
+  // Synchronous, before any child can fire a query.
   const [isInitialized] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
-      // data-layer v1.2+ signature:
-      // (dmUrl, lmsUrl, legacyLmsUrl, storageService, httpErrorHandler)
       initializeDataLayer(
         config.dmUrl(),
         config.lmsUrl(),
-        // Dedicated edX host (learn.*) — NOT lmsUrl: on hosted defaults that
-        // is the consolidated API path (api.iblai.app/lms), and the
-        // legacy-LMS endpoints + edX iframes live on the real LMS host.
         config.legacyLmsUrl(),
         storageService,
         {
@@ -88,59 +77,70 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
     return true;
   });
 
-  // `isInitialized` is false during SSR but true on the client's first render,
-  // so gating the tree on it alone makes server and client markup disagree and
-  // React throws a hydration mismatch on every route. Gate on a mount flag
-  // instead: server and first client render both produce LOADING, and the tree
-  // appears on the next commit. The data layer is still initialized
-  // synchronously above, before any child can fire a query.
+  // Server and first client render both produce LOADING (no hydration mismatch).
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const [authNotice, setAuthNotice] = useState<NoticeCode | null>(null);
-
-  // The SDK reports the failure and stops; without this the tenant fallback
-  // stays on screen forever.
-  useEffect(() => {
-    if (!authNotice) return;
-    if (window.location.pathname.startsWith("/login")) return;
-
-    const email = currentUserEmail();
-    const recoverable =
-      authNotice === "no_access" || authNotice === "other_workspace";
-
-    void (async () => {
-      beginRecovery();
-      if (recoverable && (await attemptAutoAccess(email, resolveAppTenant(), authNotice))) {
-        window.location.replace("/");
-        return;
-      }
-      endRecovery();
-      if (recoverySucceeded()) return;
-      localStorage.clear();
-      window.location.replace(loginNoticeUrl(authNotice, email));
-    })();
-  }, [authNotice]);
 
   const username = useMemo(() => {
     if (typeof window === "undefined") return "";
     try {
       const raw = localStorage.getItem("userData");
       if (raw) return JSON.parse(raw).user_nicename ?? "";
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return "";
   }, [isInitialized]);
 
-  // Tenant resolution: .env -> app_tenant -> localStorage tenant
   const tenantKey = useMemo(() => resolveAppTenant(), [isInitialized]);
 
-  const isSsoRoute =
-    (pathname?.startsWith("/sso-login") ||
-      pathname?.startsWith("/login") ||
-      pathname?.startsWith("/privacy") ||
-      pathname?.startsWith("/terms") ||
-      pathname?.startsWith("/faq")) ??
-    false;
+  const isSsoRoute = isPublicPath(pathname ?? "/");
+
+  const sendToPaywall = () => {
+    clearFailedTenantJoin(tenantKey);
+    saveReturnPath("/");
+    window.location.assign(PAYWALL_PATH);
+  };
+
+  useEffect(() => {
+    if (!authNotice) return;
+    if (window.location.pathname.startsWith(PAYWALL_PATH)) return;
+    if (isMembershipNotice(authNotice)) {
+      sendToPaywall();
+      return;
+    }
+    const email = currentUserEmail();
+    localStorage.clear();
+    window.location.replace(loginNoticeUrl(authNotice, email));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authNotice]);
+
+  /**
+   * Every redirect the SDK asks for. A refused non-member goes to the paywall.
+   * A request to switch a member of this tenant to another tenant is cookie
+   * drift from the SDK's cross-app sync, not a switch: resync and stay.
+   */
+  const authRedirect = async (
+    redirectTo?: string,
+    platformKey?: string,
+    logout?: boolean,
+    saveRedirect?: boolean,
+  ) => {
+    const signedIn = !!localStorage.getItem("dm_token");
+    const member = isTenantMember(readTenants(), tenantKey);
+    if (signedIn && !member && hasFailedTenantJoin(tenantKey)) {
+      sendToPaywall();
+      return;
+    }
+    if (signedIn && member && !logout && platformKey && platformKey !== tenantKey) {
+      console.warn("[auth] ignoring a switch to", platformKey, "— this session is a member here");
+      await syncAuthToCookies(storageService);
+      return;
+    }
+    await redirectToAuthSpa(redirectTo, platformKey, logout, saveRedirect);
+  };
 
   const LOADING = (
     <div className="flex min-h-screen items-center justify-center">
@@ -155,7 +155,7 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
     <ReduxProvider store={iblaiStore}>
       <AuthProvider
         skip={isSsoRoute}
-        redirectToAuthSpa={redirectToAuthSpa}
+        redirectToAuthSpa={authRedirect}
         username={username}
         pathname={pathname ?? "/"}
         storageService={storageService}
@@ -164,38 +164,32 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
         fallback={LOADING}
       >
         <TenantProvider
-          // The action is typed for the mentor-scoped shape but its reducer
-          // spreads any map; the platform flags NotificationDisplay/Account
-          // read (`/platforms/<key>/` → can_*) are exactly what arrives here.
           onLoadPlatformPermissions={(permissions) => {
             if (permissions) {
               iblaiStore.dispatch(
-                updateRbacPermissions(permissions as unknown as Parameters<typeof updateRbacPermissions>[0]),
+                updateRbacPermissions(
+                  permissions as unknown as Parameters<typeof updateRbacPermissions>[0],
+                ),
               );
             }
           }}
           skip={isSsoRoute}
           currentTenant={tenantKey}
           requestedTenant={tenantKey}
+          // Stored in the SDK's shape and mirrored to its cookies at once, so
+          // the SDK's cross-app sync never sees storage and cookies disagree.
           saveCurrentTenant={(t: any) => {
-            const key = typeof t === "string" ? t : t?.key ?? String(t);
-            localStorage.setItem("current_tenant", key);
+            const key = typeof t === "string" ? t : (t?.key ?? String(t));
+            const record = typeof t === "object" && t ? { ...t, key } : { key };
+            localStorage.setItem("current_tenant", JSON.stringify(record));
             localStorage.setItem("tenant", key);
-
-            // If the SDK resolved a different tenant than what the app
-            // expects, redirect to re-login for the correct tenant.
+            void syncAuthToCookies(storageService);
             checkTenantMismatch();
           }}
-          saveUserTenants={(t: unknown) =>
-            localStorage.setItem("tenants", JSON.stringify(t))
-          }
-          // TenantProvider re-authenticates against the requested tenant and
-          // hands back a fresh, tenant-scoped token pair. Without persisting it
-          // the next membership check still runs on the pre-switch tokens, so
-          // the provider loops on
-          //   "User still does not belong to tenant after re-auth"
-          // and the app never leaves its loading state. iblai/os wires these up
-          // (providers/index.tsx -> saveUserTokens).
+          saveUserTenants={(t: unknown) => {
+            localStorage.setItem("tenants", JSON.stringify(t));
+            void syncAuthToCookies(storageService);
+          }}
           saveUserTokens={(tokens: TokenResponse) => {
             if (tokens?.axd_token) {
               localStorage.setItem("axd_token", tokens.axd_token.token);
@@ -211,21 +205,18 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
             console.error("[TenantProvider] Auth failure:", reason);
             setAuthNotice(classifyAuthFailure(reason));
           }}
-          // The SDK asks to switch when the user belongs to a different
-          // platform than the one this app serves. Following it would sign
-          // them into someone else's workspace, and ignoring the argument
-          // loops them through the Auth SPA forever, so say so instead.
+          // A switch to another tenant means "not a member here": the paywall.
           handleTenantSwitch={async (requested?: unknown) => {
             const appTenant = resolveAppTenant();
             const target = typeof requested === "string" ? requested : "";
             if (target && appTenant && target !== appTenant) {
-              console.error("[TenantProvider] Tenant switch refused:", target);
+              console.warn("[TenantProvider] Tenant switch refused:", target);
               setAuthNotice("other_workspace");
               return;
             }
-            redirectToAuthSpa(undefined, appTenant, false, true);
+            void redirectToAuthSpa(undefined, appTenant, false, true);
           }}
-          redirectToAuthSpa={redirectToAuthSpa}
+          redirectToAuthSpa={authRedirect}
           username={username}
           fallback={LOADING}
         >

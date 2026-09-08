@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 const ROUTES = [
   "/", "/ai-avatar/generate", "/ai-avatar/my", "/ai-avatar/select",
   "/videos/generate", "/videos/my", "/scripts", "/account", "/notifications",
-  "/faq", "/privacy", "/terms", "/video/watch/sample",
+  "/faq", "/privacy", "/terms", "/video/watch/sample", "/join",
 ];
 
 test.describe("link integrity", () => {

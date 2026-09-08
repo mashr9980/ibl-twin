@@ -1,6 +1,6 @@
-import "./login.css";
+import "./join.css";
 
-export const metadata = { title: "Sign in" };
+export const metadata = { title: "Join" };
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
   return children;

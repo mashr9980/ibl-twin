@@ -13,6 +13,7 @@ ship, the interface stays unified and functional rather than pixel-copied.
 | Area | Status |
 |---|---|
 | ibl.ai SSO (`login.iblai.app`), tenant resolution, cross-SPA session | ✓ |
+| **Access & payments**: Auth SPA sign-in/sign-up → paywall → Stripe subscription on the tenant's own Stripe → member; admin form on `/account` | ✓ end to end in Chromium: publish → sign in → pay (test card) → member → app |
 | Sidebar shell, profile menu, footer, page titles, dark-mode-safe tokens | ✓ |
 | AI Avatar gallery (grouped by character, paginated), voices, generate modal | ✓ |
 | HeyGen video generation end to end (avatar, clip, photo-avatar upload + train) | ✓ real render produced |
@@ -20,6 +21,59 @@ ship, the interface stays unified and functional rather than pixel-copied.
 | Account → Management (Users / Roles / Policies), **Invite** wired to platform invitations | ✓ invite accepted end to end |
 | Notifications inbox; admin-only Alerts + composer gated by tenant RBAC | ✓ |
 | FAQ, Privacy, Terms, `/videos/generate` | ✓ |
+
+## Access & payments
+
+Membership of the tenant is the entitlement, and **paying is the only way to
+get it**: self-join on the platform stays closed, there is no free option and
+nobody is invited by the app. The workspace owner publishes one plan on
+**Account → Access & payments** (admins only), either by picking a price that
+already exists in the workspace's Stripe account (listed live; USD, one-off or
+billed monthly) or by creating a one-time or monthly fee there. Publish tags the
+Stripe product (`metadata.app = PAYWALL_APP_SLUG`), creates the price when
+needed, closes self-join, and records the plan in the tenant's public metadata
+under `apps.<slug>`. The app never archives a price the owner made in Stripe.
+The form asks for the tenant's Stripe **secret or restricted** key (`sk_…` /
+`rk_…`; a publishable `pk_…` key cannot create products or checkouts) and saves
+it browser → platform through the SDK credential hooks. This app's server never
+sees it.
+
+There is no sign-in screen of ours. The flow is:
+
+| Who | What happens |
+|---|---|
+| Signed-out visitor, any route | Straight to the ibl.ai Auth SPA (`login?app=custom&redirect-to=<origin>&tenant=<key>`): sign in, or create an account with a password / Google / Apple / Microsoft. It returns to `/sso-login-complete?data=…`, which stores the tokens and lands on the route they asked for. |
+| Signed in, not a member (new account, or an account from another workspace) | The SDK's self-join attempt is refused; the providers send them to `/join`, which shows only a loader: one call to `/api/paywall/checkout` answers "already paid" (membership re-asserted, app opens) or a Stripe Checkout URL on the tenant's Stripe, and the browser goes there. Stripe returns to `/join?session_id=…` (a loader), the server verifies the session is theirs and paid, links them as a member (`POST /api/core/users/platforms/`) and they land in the app. Stripe's cancel link returns to `/join?canceled=1`, the one screen with a button. |
+| Signed in, a member | Never sees a payment step. `/join` bounces them into the app. |
+| Member whose subscription lapsed | Caught on a later visit (checked once a minute per session). Conservative on purpose: the membership ends only when the ledger says they paid, the platform's live check says no, the payment is older than a day, and Stripe itself reports the subscription as canceled, unpaid or expired. Anything ambiguous keeps the member in. |
+| Payer whose browser lost the membership | Before minting a checkout the server checks the platform's ledger and Stripe itself (a live subscription or a paid session of this app for the customer); if either says they paid, the membership is re-asserted and the app opens. An automatic redirect can never charge anyone twice. |
+| No plan published yet | Non-members see "the owner hasn't published a plan yet" on the paywall (admins get a link to publish one); admins see a banner in the app. |
+
+Server routes (`app/api/paywall/*`): `prices` (public: the plan and whether the
+server is ready), `checkout` (mints the Checkout Session for the signed-in
+caller through the platform's Stripe proxy, as the platform), `access`
+(verifies a return and links the buyer; or a member's standing),
+`admin/prices` (the owner's active Stripe prices) and `admin/setup` (publishes
+the plan), both forwarding the admin's own token so the platform decides who
+may. No webhooks: the platform's paywall is verified polling by design.
+
+**Why the tenant is stored the SDK's way.** The SDK's AuthProvider keeps an
+`ibl_current_tenant` cookie and localStorage `current_tenant` in sync every two
+seconds and treats a difference as "another ibl.ai app switched tenant",
+redirecting to the Auth SPA. The Auth SPA writes `{"key":"main"}` for a user
+who is not a member yet, so the first load after paying used to bounce app →
+SPA → app. The providers therefore store the tenant as the SDK's JSON object,
+mirror it to the cookies through the SDK's own `syncAuthToCookies` whenever
+TenantProvider saves, and ignore a "switch to another tenant" request for a
+session that is already a member here.
+
+Credentials the server needs (`.env.local`): `IBLAI_API_KEY`, a Platform API
+Token for this tenant (os.ibl.ai → Integrations → APIs → Add API, or
+`POST /api/core/platform/api-tokens/` with the admin's session token). Until it
+exists, `IBLAI_ADMIN_TOKEN` (an admin's `dm_token` from localStorage after
+sign-in) is accepted for checkout, joining and the ledger, but it expires with
+that session. Without either, the paywall says payments are not connected and
+the routes answer 500 naming the keys.
 
 ## Architecture notes
 
@@ -94,7 +148,7 @@ respectively; vibe ships CI workflows for both.
 
 ```bash
 pnpm typecheck
-pnpm vitest run                                  # 23 unit tests (config, HeyGen credential parsing, RBAC fallback)
+pnpm vitest run                                  # 87 unit tests (config, HeyGen, RBAC, paywall lib + routes, tenant, auth hand-off)
 PW_ENV=.env.live PW_STORAGE=playwright/.auth/user-live.json pnpm exec playwright test -c e2e/playwright.config.ts
 ```
 

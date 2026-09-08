@@ -27,7 +27,7 @@ setup('authenticate', async ({ page }) => {
 
   // Wait for the auth SPA login page — just check for /login and app=agent
   await page.waitForURL(
-    (url) => url.href.includes('/login') && url.href.includes('app=agent'),
+    (url) => url.href.includes('/login') && url.href.includes('app=custom'),
     { timeout: 60_000 },
   );
 

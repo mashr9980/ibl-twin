@@ -7,14 +7,17 @@ import { AppSidebar, SidebarNav, TwinLogo } from "@/components/twin/app-sidebar"
 import { ProfileMenu } from "@/components/twin/profile-menu";
 import { cn } from "@/lib/utils";
 import { AppFooter } from "@/components/twin/app-footer";
-import { handleLogout } from "@/lib/iblai/auth-utils";
-import { resolveAppTenant } from "@/lib/iblai/tenant";
+import { SetupBanner } from "@/components/twin/setup-banner";
+import { handleLogout, saveReturnPath } from "@/lib/iblai/auth-utils";
+import { PAYWALL_PATH, dropTenant, isTenantAdmin, resolveAppTenant } from "@/lib/iblai/tenant";
+import { checkMemberAccess, memberAccessSettled } from "@/lib/paywall-client";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
@@ -33,8 +36,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     } catch {
       /* unauthenticated render — providers redirect before this matters */
     }
-    // Touch the tenant resolver so a mismatch is caught on first paint.
-    resolveAppTenant();
+    const tenantKey = resolveAppTenant();
+    const admin = isTenantAdmin();
+    setIsAdmin(admin);
+
+    // Paying members are re-checked once a minute per session.
+    if (admin || memberAccessSettled()) return;
+    void checkMemberAccess().then((ok) => {
+      if (ok) return;
+      dropTenant(tenantKey);
+      saveReturnPath("/");
+      window.location.assign(PAYWALL_PATH);
+    });
   }, []);
 
   const profile = (
@@ -106,6 +119,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto bg-[var(--canvas-muted)]">
+          <SetupBanner isAdmin={isAdmin} />
           {children}
         </main>
 

@@ -1,42 +1,21 @@
-
-/**
- * ibl.ai auth helper utilities.
- *
- * These are thin wrappers used by IblaiProviders. You can customise the
- * redirect behaviour here without touching the provider component.
- */
+// The Auth SPA (login.<domain>) issues every session and returns to
+// <origin>/sso-login-complete?data=<tokens>, which SsoLogin stores.
 
 import config from "./config";
 import { resolveAppTenant } from "./tenant";
-import {
-  attemptAutoAccess,
-  beginRecovery,
-  clearFailedTenantJoin,
-  currentUserEmail,
-  endRecovery,
-  hasFailedTenantJoin,
-  isRecovering,
-  loginNoticeUrl,
-  recoverySucceeded,
-} from "./access";
 
-/** Check if running inside a Tauri app. */
 export function isTauri(): boolean {
   if (typeof window === "undefined") return false;
   return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
 }
 
-/** Check if running inside a Tauri mobile app (iOS/Android). */
 export function isTauriMobile(): boolean {
   if (!isTauri()) return false;
   return /android|iphone|ipad|ipod/i.test(navigator.userAgent);
 }
 
-/** Get the redirect origin for the Auth SPA.
- *  - Mobile Tauri: custom scheme (e.g. `iblai-skills://`)
- *  - Desktop Tauri / Web: window.location.origin
- */
-function getRedirectOrigin(): string {
+/** Mobile Tauri returns through a custom scheme; everything else through the page origin. */
+export function getRedirectOrigin(): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   if (isTauriMobile()) {
     const scheme = config.tauriCustomScheme();
@@ -45,64 +24,58 @@ function getRedirectOrigin(): string {
   return origin;
 }
 
-/**
- * Send a signed-out visitor to the branded sign-in screen first.
- *
- * The Auth SPA is where the session is actually issued, but jumping straight
- * there means the first thing anyone sees is ibl.ai's generic login rather
- * than this app. /login renders the branded screen and hands off from there.
- * Logout still goes direct, since there is nothing to brand on the way out.
- */
+export const authLoginUrl = (origin: string, tenant: string, email = "") =>
+  `${config.authUrl()}/login?app=custom&redirect-to=${origin}` +
+  (tenant ? `&tenant=${encodeURIComponent(tenant)}` : "") +
+  (email ? `&email=${encodeURIComponent(email)}` : "");
+
+/** Sign-up on the Auth SPA; no tenant, since self-join is closed and the paywall takes over on return. */
+export const authSignupUrl = (origin: string) =>
+  `${config.authUrl()}/signup?app=custom&redirect-to=${origin}`;
+
+/** The localStorage key SsoLogin reads (then clears) to know where to land. */
+export const RETURN_PATH_KEY = "redirectTo";
+
+const NOT_A_DESTINATION = /^\/(join|login|sso-login|sso-login-complete)(\/|\?|$)/;
+
+export function saveReturnPath(path: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(RETURN_PATH_KEY, NOT_A_DESTINATION.test(path) ? "/" : path);
+}
+
+export function readReturnPath(): string {
+  if (typeof window === "undefined") return "/";
+  const saved = localStorage.getItem(RETURN_PATH_KEY) ?? "";
+  return saved && !NOT_A_DESTINATION.test(saved) ? saved : "/";
+}
+
 export async function redirectToAuthSpa(
   redirectTo?: string,
   platformKey?: string,
   logout?: boolean,
   saveRedirect?: boolean,
 ) {
-  if (typeof window !== "undefined" && (isRecovering() || recoverySucceeded())) return;
+  if (typeof window === "undefined") return;
 
   const redirectOrigin = getRedirectOrigin();
-  const path = redirectTo ?? (typeof window !== "undefined" ? window.location.pathname : "/");
-
-  if (saveRedirect) {
-    localStorage.setItem("redirectTo", path);
-  }
+  const path = redirectTo ?? window.location.pathname + window.location.search;
+  if (saveRedirect) saveReturnPath(path);
 
   const tenant = platformKey || resolveAppTenant();
 
-  // A refused tenant join sends the user back here to sign in again, which on
-  // its own just loops. Break out and explain instead.
-  if (typeof window !== "undefined" && hasFailedTenantJoin(tenant)) {
-    const email = currentUserEmail();
-    clearFailedTenantJoin(tenant);
-
-    // The session is still valid at this point, so if the invitation lands the
-    // membership check passes on a plain reload.
-    beginRecovery();
-    if (await attemptAutoAccess(email, tenant, "not_a_member")) {
-      window.location.replace("/");
-      return;
-    }
-    endRecovery();
-
-    localStorage.clear();
-    window.location.href = loginNoticeUrl("no_access", email);
-    return;
-  }
-
-  if (!logout && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-    window.location.href = "/login";
-    return;
-  }
-
-  let authUrl = `${config.authUrl()}/login?app=custom&redirect-to=${redirectOrigin}`;
-  if (tenant) authUrl += `&tenant=${encodeURIComponent(tenant)}`;
+  let authUrl = authLoginUrl(redirectOrigin, tenant);
   if (logout) authUrl += "&logout=1";
-
   window.location.href = authUrl;
 }
 
-/** Check whether a non-expired auth token exists in localStorage. */
+export function hasLiveDmToken(): boolean {
+  if (typeof window === "undefined") return false;
+  const token = localStorage.getItem("dm_token");
+  if (!token) return false;
+  const expiry = localStorage.getItem("dm_token_expires");
+  return !expiry || new Date(expiry) > new Date();
+}
+
 export function hasNonExpiredAuthToken(): boolean {
   if (typeof window === "undefined") return false;
   const token = localStorage.getItem("axd_token");
@@ -112,10 +85,14 @@ export function hasNonExpiredAuthToken(): boolean {
   return new Date(expiry) > new Date();
 }
 
-/** Handle logout: clear state and redirect to the Auth SPA logout page. */
 export function handleLogout() {
   const tenant = resolveAppTenant();
   const redirectOrigin = getRedirectOrigin();
   localStorage.clear();
+  try {
+    sessionStorage.clear();
+  } catch {
+    /* private mode */
+  }
   window.location.href = `${config.authUrl()}/logout?redirect-to=${redirectOrigin}&tenant=${encodeURIComponent(tenant)}`;
 }

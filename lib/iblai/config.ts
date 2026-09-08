@@ -33,6 +33,8 @@ const env = {
     process.env.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN,
   NEXT_PUBLIC_MAIN_TENANT_KEY: process.env.NEXT_PUBLIC_MAIN_TENANT_KEY,
   NEXT_PUBLIC_TAURI_CUSTOM_SCHEME: process.env.NEXT_PUBLIC_TAURI_CUSTOM_SCHEME,
+  NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
+  NEXT_PUBLIC_SUPPORT_EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
 };
 
 declare global {
@@ -101,6 +103,9 @@ const config = {
   tauriCustomScheme: () => getEnv("NEXT_PUBLIC_TAURI_CUSTOM_SCHEME", ""),
   platformBaseDomain: () => domain(),
 
+  appName: () => getEnv("NEXT_PUBLIC_APP_NAME", "memorare twin"),
+  supportEmail: () => getEnv("NEXT_PUBLIC_SUPPORT_EMAIL", "support@iblai.zendesk.com"),
+
   // Server-only: IBLAI_API_KEY is a secret and not NEXT_PUBLIC_*, so Next.js
   // never inlines it into the client bundle — in the browser this returns "".
   // Use it from route handlers / server components for platform API calls
@@ -109,6 +114,17 @@ const config = {
   // key is also a standard OpenAI `Bearer` api key). Deliberately not routed
   // through getEnv/window.__ENV__, which are client-visible.
   apiKey: () => process.env.IBLAI_API_KEY ?? "",
+
+  // Server-only fallback: an admin's DM session token (expires with the session).
+  adminToken: () => process.env.IBLAI_ADMIN_TOKEN?.trim() ?? "",
+
+  // The Authorization header the server uses to act as the platform, or "".
+  platformAuth: (): string => {
+    const key = process.env.IBLAI_API_KEY ?? "";
+    if (key && key !== "your-token") return `Api-Token ${key}`;
+    const admin = process.env.IBLAI_ADMIN_TOKEN?.trim() ?? "";
+    return admin ? `Token ${admin}` : "";
+  },
 };
 
 export default config;

@@ -147,3 +147,18 @@
 .login-page .auth-card__signup a:hover{text-decoration:underline}
 .login-page .auth-notice__action--primary{display:inline-block;margin-right:.5rem;border-color:#38A1E5;color:#38A1E5;text-decoration:none}
 .login-page .auth-notice__action--primary:hover{background:#38A1E5;color:#fff}
+
+/* Join / checkout-return steps (same screen, twin's card language) */
+.login-page .join-muted{margin:0;text-align:center;font-size:1rem;line-height:1.5;color:var(--text-muted)}
+.login-page .join-muted--small{font-size:.8125rem}
+.login-page .plan-card{display:flex;flex-direction:column;gap:.875rem;padding:1.25rem;border:1px solid var(--input-border);border-radius:var(--card-radius);background:#fff;text-align:center}
+.login-page .plan-card__name{margin:0;font-size:.9375rem;font-weight:500;color:var(--title-color)}
+.login-page .plan-card__price{margin:0;font-size:2.25rem;font-weight:700;line-height:1;color:#1f2937}
+.login-page .plan-card__interval{margin-left:.125rem;font-size:.9375rem;font-weight:400;color:var(--text-muted)}
+.login-page .join-spinner{width:2rem;height:2rem;margin:0 auto;border-radius:50%;border:3px solid rgba(0,120,255,.15);border-top-color:var(--accent);animation:join-spin .8s linear infinite}
+@keyframes join-spin{to{transform:rotate(360deg)}}
+.login-page a.btn{text-decoration:none}
+.dark .login-page .plan-card{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12)}
+.dark .login-page .plan-card__price{color:#e8eaf0}
+.login-page .link-button{padding:0;border:0;background:none;font:inherit;color:#38A1E5;font-weight:500;cursor:pointer}
+.login-page .link-button:hover{text-decoration:underline}
