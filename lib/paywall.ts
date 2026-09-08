@@ -241,6 +241,32 @@ export async function writeAppPaymentInfo(token: string, info: AppPaymentInfo): 
   invalidateAppPaymentInfo();
 }
 
+// The platform's self-join switch, a public read cached briefly. Open means
+// free access: the SDK joins anyone who signs in and nothing is sold.
+let selfJoinCache: { open: boolean; at: number } | null = null;
+const SELF_JOIN_TTL_MS = 60_000;
+
+export function invalidateSelfJoin(): void {
+  selfJoinCache = null;
+}
+
+export async function selfJoinOpen(): Promise<boolean> {
+  if (selfJoinCache && Date.now() - selfJoinCache.at < SELF_JOIN_TTL_MS) return selfJoinCache.open;
+  let open = false;
+  try {
+    const res = await fetch(
+      `${config.dmUrl()}/api/core/users/platforms/config/public/?${new URLSearchParams({ platform_key: config.mainTenantKey() })}`,
+      { cache: "no-store" },
+    );
+    const body = res.ok ? await res.json().catch(() => null) : null;
+    open = body?.allow_self_linking === true;
+  } catch {
+    open = false;
+  }
+  selfJoinCache = { open, at: Date.now() };
+  return open;
+}
+
 export async function allowedPriceIds(): Promise<string[]> {
   const env = envPriceIds();
   if (env.length) return env;
@@ -264,7 +290,7 @@ async function fetchPriceDisplay(id: string): Promise<CataloguePrice> {
 export type Catalogue = {
   paywall: boolean;
   decided: boolean;
-  source: "env" | "metadata" | "none";
+  source: "env" | "metadata" | "none" | "free";
   platformName: string;
   prices: CataloguePrice[];
   settings: { access: Access; amount: number | null } | null;
@@ -274,6 +300,8 @@ export async function resolveCatalogue(): Promise<Catalogue> {
   const env = envPriceIds();
   const { info, platformName } = await readAppPaymentInfo();
   const settings = info ? { access: info.access, amount: info.amount } : null;
+  if (await selfJoinOpen())
+    return { paywall: false, decided: true, source: "free", platformName, prices: [], settings };
   if (env.length) {
     const prices: CataloguePrice[] = [];
     for (const id of env) prices.push(await fetchPriceDisplay(id));

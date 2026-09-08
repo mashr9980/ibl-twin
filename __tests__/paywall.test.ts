@@ -28,6 +28,8 @@ const stubFetch = (impl: (url: string, init?: RequestInit) => Response | Promise
     "fetch",
     vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : String(input);
+      // The platform's self-join switch (closed here) is read by the catalogue.
+      if (url.includes("/platforms/config/public/")) return Response.json({ allow_self_linking: false });
       calls.push({ url, init });
       return impl(url, init);
     }),

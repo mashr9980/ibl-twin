@@ -19,7 +19,7 @@ export type CatalogueView = {
   serverReady: boolean;
   paywall: boolean;
   decided: boolean;
-  source: "env" | "metadata" | "none";
+  source: "env" | "metadata" | "none" | "free";
   platformName: string;
   prices: CataloguePriceView[];
   settings: { access: Access; amount: number | null } | null;
@@ -106,8 +106,8 @@ export const markSetupDone = () => session()?.setItem(SETUP_OK_KEY, String(Date.
 
 export async function checkPaywallSetup(): Promise<"decided" | "undecided" | "unknown"> {
   try {
-    const { paywall } = await fetchCatalogue();
-    if (!paywall) return "undecided";
+    const { paywall, source } = await fetchCatalogue();
+    if (!paywall && source !== "free") return "undecided";
     markSetupDone();
     return "decided";
   } catch (e) {

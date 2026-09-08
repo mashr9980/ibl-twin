@@ -12,15 +12,17 @@ import {
   platformCredentialProblem,
   recordedPayments,
   retrieveSession,
+  selfJoinOpen,
   userFromRequest,
 } from "@/lib/paywall";
 
 export const dynamic = "force-dynamic";
 
 /**
- * For the signed-in caller: `{ already: true }` when they hold a live payment
- * (membership re-asserted), else `{ checkout_url }`; 404 `no_plan` while
- * nothing is published.
+ * For the signed-in caller: `{ already: true }` when access is free (the
+ * platform's self-join switch is open: they are linked here) or when they
+ * hold a live payment (membership re-asserted), else `{ checkout_url }`;
+ * 404 `no_plan` while nothing is published.
  */
 export async function POST(req: NextRequest) {
   const problem = platformCredentialProblem();
@@ -29,6 +31,10 @@ export async function POST(req: NextRequest) {
   try {
     const buyer = await userFromRequest(req);
     if (!buyer) return NextResponse.json({ error: "Sign in to continue" }, { status: 401 });
+    if (await selfJoinOpen()) {
+      await assertMembership(buyer.userId);
+      return NextResponse.json({ already: true, source: "free" });
+    }
     const allowed = await allowedPriceIds();
     if (allowed.length === 0)
       return NextResponse.json(

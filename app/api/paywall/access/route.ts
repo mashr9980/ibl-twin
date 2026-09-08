@@ -7,6 +7,7 @@ import {
   payerStanding,
   platformCredentialProblem,
   recordedPayments,
+  selfJoinOpen,
   userFromRequest,
   verifyAndJoin,
 } from "@/lib/paywall";
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
   try {
     if (!user) return NextResponse.json({ error: "Sign in to continue" }, { status: 401 });
     if (sessionId) return NextResponse.json({ joined: await verifyAndJoin(user, sessionId) });
-    if ((await allowedPriceIds()).length === 0)
+    if ((await selfJoinOpen()) || (await allowedPriceIds()).length === 0)
       return NextResponse.json({ has_access: true, paywall: false });
     const rows = await recordedPayments(user.username);
     if (rows.length === 0) return NextResponse.json({ has_access: true, payer: false });

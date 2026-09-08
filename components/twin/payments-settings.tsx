@@ -209,7 +209,13 @@ export function PaymentsSettings({ tenantKey }: { tenantKey: string }) {
         </p>
       </div>
 
-      {catalogue && !catalogue.paywall && (
+      {catalogue?.source === "free" && (
+        <Alert className="mb-4">
+          Free access is on: the platform&apos;s self-join switch is open, so anyone who signs in joins
+          this workspace and nothing is sold. Close self-join on the platform to sell the plan below.
+        </Alert>
+      )}
+      {catalogue && !catalogue.paywall && catalogue.source !== "free" && (
         <Alert className="mb-4">
           No plan is published yet, so nobody outside the workspace can join. Pick a price and
           publish it.
