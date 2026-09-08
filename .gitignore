@@ -66,3 +66,6 @@ playwright-report/
 /src-tauri/target/
 /src-tauri/gen/
 .data/
+
+# Private Claude notes for this checkout (loaded next to CLAUDE.md, never committed)
+CLAUDE.local.md
