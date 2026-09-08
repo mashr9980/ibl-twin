@@ -114,7 +114,7 @@ export function InviteDialog({ open, onClose }: { open: boolean; onClose: () => 
           />
 
           {state.message && (
-            <Alert className="mt-2">{state.message}</Alert>
+            <Alert tone={state.kind === "error" ? "warning" : "info"} className="mt-2">{state.message}</Alert>
           )}
 
           <div className="mt-4 flex justify-end gap-2">

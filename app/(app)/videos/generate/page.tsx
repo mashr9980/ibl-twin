@@ -268,7 +268,7 @@ export default function CreateVideoClipPage() {
               <ChevronDown className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 opacity-50" strokeWidth={2} aria-hidden />
             </div>
 
-            {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
+            {error && <Alert tone="warning" onDismiss={() => setError(null)}>{error}</Alert>}
 
             <button type="button" onClick={generate} disabled={busy || !file || !prompt.trim()} aria-busy={busy}
               className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-[5px] border-0 bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] px-4 py-2 text-xs font-medium text-white shadow-none transition-all hover:brightness-[0.96] active:brightness-[0.92] disabled:pointer-events-none disabled:opacity-50 sm:h-11 sm:text-[13px]">

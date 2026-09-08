@@ -63,16 +63,36 @@ export class HeygenPhotoRejectedError extends Error {
   }
 }
 
+/** Any other HeyGen refusal, with the reason HeyGen gave when it gave one. */
+export class HeygenRequestError extends Error {
+  constructor(public status: number, public detail: string) {
+    super(`heygen ${status}${detail ? `: ${detail}` : ""}`);
+    this.name = "HeygenRequestError";
+  }
+}
+
+/** The human-readable part of a HeyGen error body, if any. */
+function heygenDetail(text: string): string {
+  try {
+    const parsed = JSON.parse(text) as { error?: { message?: string } | string; message?: string };
+    const msg = typeof parsed.error === "string" ? parsed.error : parsed.error?.message ?? parsed.message;
+    return typeof msg === "string" ? msg.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 /** One plain sentence for any HeyGen failure; `fallback` for the unknown ones. */
 export function heygenErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof HeygenCredentialMissingError) return "HeyGen integration required. Ask the workspace owner to connect HeyGen.";
   if (err instanceof HeygenFreeLimitError) return "You've used your free videos for this month. Upgrade for unlimited videos.";
   if (err instanceof HeygenCreditsExhaustedError)
-    return "HeyGen doesn't have enough credits for this step. A video costs about 1 credit per minute; the workspace owner can add credits in HeyGen.";
+    return "HeyGen doesn't have enough credits for this video. The workspace owner can add credits in HeyGen; a shorter script needs fewer.";
   if (err instanceof HeygenBusyError) return "HeyGen is busy right now. Please try again in a moment.";
   if (err instanceof HeygenTimeoutError) return "This is taking longer than usual. Please try again in a moment.";
   if (err instanceof HeygenPhotoRejectedError) return "HeyGen couldn't use that picture. Try a clear, front-facing photo of one person.";
   if (err instanceof Error && /413|too large/i.test(err.message)) return "File too large. Please use a smaller file.";
+  if (err instanceof HeygenRequestError && err.detail) return `${fallback} HeyGen said: ${err.detail.replace(/\.?$/, ".")}`;
   return fallback;
 }
 
@@ -93,7 +113,7 @@ async function failure(path: string, res: Response): Promise<Error> {
     }
     return new HeygenFreeLimitError(limit);
   }
-  return new Error(`heygen ${path}: ${res.status} ${text.slice(0, 200)}`);
+  return new HeygenRequestError(res.status, heygenDetail(text).slice(0, 200));
 }
 
 /** Paths whose success counts against the free plan; the banner is told at once. */

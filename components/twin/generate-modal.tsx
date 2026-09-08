@@ -338,7 +338,7 @@ export function GenerateModal({
                   </div>
                 </section>
 
-                {error && <Alert onDismiss={() => setError(null)}>{error}</Alert>}
+                {error && <Alert tone="warning" onDismiss={() => setError(null)}>{error}</Alert>}
               </div>
             </div>
           </div>

@@ -7,6 +7,7 @@ import {
   HeygenBusyError,
   HeygenCreditsExhaustedError,
   HeygenPhotoRejectedError,
+  HeygenRequestError,
   HeygenTimeoutError,
   heygenErrorMessage,
   waitForLook,
@@ -48,6 +49,18 @@ describe("createVideo", () => {
     const sent = JSON.parse(String(calls[0].init.body));
     expect(sent.video_inputs[0].character).toEqual({ type: "talking_photo", talking_photo_id: "look1" });
     expect(calls[0].url).toContain("/api/heygen/v2/video/generate");
+  });
+
+  it("treats the unlimited-mode refusal as missing credits", async () => {
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ data: null, error: { code: "internal_error", message: "This avatar does not support unlimited mode. Please use a different avatar, or use Avatar IV or Avatar V." } }), { status: 400 }));
+    await expect(createVideo({ ...base, avatar_id: "look1", talking_photo: true })).rejects.toBeInstanceOf(HeygenCreditsExhaustedError);
+  });
+
+  it("keeps HeyGen's reason for other refusals", async () => {
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ error: { code: "invalid_parameter", message: "Voice not found" } }), { status: 400 }));
+    const err = await createVideo({ ...base, avatar_id: "a1" }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HeygenRequestError);
+    expect(heygenErrorMessage(err, "Video generation failed.")).toBe("Video generation failed. HeyGen said: Voice not found.");
   });
 
   it("reports a HeyGen outage as busy", async () => {

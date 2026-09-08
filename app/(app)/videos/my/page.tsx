@@ -180,7 +180,7 @@ function MyVideosInner() {
             )}
           </div>
 
-          {error && <Alert className="mb-4" onDismiss={() => setError(null)}>{error}</Alert>}
+          {error && <Alert tone="warning" className="mb-4" onDismiss={() => setError(null)}>{error}</Alert>}
 
           {chip === "twin" && twin && (
             <TwinCard
@@ -249,16 +249,18 @@ function MyVideosInner() {
                           title={
                             v.status === "failed"
                               ? "HeyGen could not render this video. Delete it and try again."
-                              : isStale(v)
+                              : v.status === "waiting"
+                                ? "HeyGen is holding this video until the workspace has enough credits."
+                                : isStale(v)
                                 ? "HeyGen has not finished this render in 30 minutes. It is unlikely to finish; delete it and try again."
                                 : undefined
                           }
                           className={cn(
                             "pointer-events-none absolute bottom-2 left-2 z-20 rounded-[5px] px-1.5 py-0.5 text-[9px] font-medium leading-none text-white sm:text-[10px]",
-                            v.status === "failed" ? "bg-red-500" : isStale(v) ? "bg-[var(--content-caption)]" : "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)]",
+                            v.status === "failed" ? "bg-red-500" : v.status === "waiting" || isStale(v) ? "bg-[var(--content-caption)]" : "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)]",
                           )}
                         >
-                          {v.status === "failed" ? "Failed" : isStale(v) ? "Stalled" : "Generating…"}
+                          {v.status === "failed" ? "Failed" : v.status === "waiting" ? "Waiting for credits" : isStale(v) ? "Stalled" : "Generating…"}
                         </span>
                       )}
 

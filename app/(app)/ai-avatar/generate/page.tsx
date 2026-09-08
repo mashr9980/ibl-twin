@@ -203,7 +203,7 @@ function Dropzone({
         )}
           </>
         )}
-        {urlError && <Alert className="mt-2 w-full">{urlError}</Alert>}
+        {urlError && <Alert tone="warning" className="mt-2 w-full">{urlError}</Alert>}
         <input ref={input} type="file" accept={accept} className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
       </div>
 

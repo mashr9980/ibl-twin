@@ -99,6 +99,11 @@ describe("creditsFromQuota", () => {
 });
 
 describe("isInsufficientCredit", () => {
+  it("recognises the unlimited-mode fallback as a credits refusal", () => {
+    expect(
+      isInsufficientCredit('{"data": null, "error": {"code": "internal_error", "message": "This avatar does not support unlimited mode. Please use a different avatar, or use Avatar IV or Avatar V."}}'),
+    ).toBe(true);
+  });
   it("recognises HeyGen's exhausted-balance answer and nothing else", () => {
     expect(
       isInsufficientCredit('{"error": {"code": "insufficient_credit", "message": "Insufficient credit."}}'),

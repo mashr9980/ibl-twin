@@ -91,7 +91,13 @@ export function creditsFromQuota(quota: number | null | undefined): HeygenCredit
 }
 
 /** HeyGen's own words for an exhausted balance, anywhere in an error body. */
-export const isInsufficientCredit = (text: string) => /insufficient_credit/i.test(text);
+/**
+ * HeyGen's two ways of saying "no credits for this": the explicit code, and the
+ * fallback it takes when it cannot reserve credits for a talking-photo video
+ * ("This avatar does not support unlimited mode…").
+ */
+export const isInsufficientCredit = (text: string) =>
+  /insufficient_credit/i.test(text) || /does not support unlimited mode/i.test(text);
 
 /** Fired in the browser when a call just failed for lack of credits. */
 export const HEYGEN_CREDITS_EVENT = "heygen:credits";
