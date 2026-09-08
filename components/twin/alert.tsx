@@ -1,23 +1,32 @@
 "use client";
 
-/** Twin's inline alert: brand blue, not red, with an optional dismiss. */
+/** Twin's inline alert: brand blue for notices, amber for warnings, with an optional dismiss. */
 
 import { cn } from "@/lib/utils";
+
+const TONES = {
+  info: "border-[#38A1E5]/50 bg-[#eef6fc] text-[#38A1E5] dark:border-[#5ec4ff]/40 dark:bg-[rgb(15_45_72_/_0.92)] dark:text-[#5ec4ff]",
+  warning:
+    "border-[#f2b544]/70 bg-[#fff7e6] text-[#8a5a00] dark:border-[#f2b544]/40 dark:bg-[rgb(66_46_10_/_0.92)] dark:text-[#ffd27a]",
+};
 
 export function Alert({
   children,
   onDismiss,
   className,
+  tone = "info",
 }: {
   children: React.ReactNode;
   onDismiss?: () => void;
   className?: string;
+  tone?: keyof typeof TONES;
 }) {
   return (
     <div
       role="alert"
       className={cn(
-        "flex items-center justify-between rounded-lg border border-[#38A1E5]/50 bg-[#eef6fc] px-4 py-3 text-[#38A1E5] dark:border-[#5ec4ff]/40 dark:bg-[rgb(15_45_72_/_0.92)] dark:text-[#5ec4ff]",
+        "flex items-center justify-between rounded-lg border px-4 py-3",
+        TONES[tone],
         className,
       )}
     >

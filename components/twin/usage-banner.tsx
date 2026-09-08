@@ -36,7 +36,7 @@ export function UsageBanner() {
   const resets = new Date(usage.resets_at).toLocaleDateString(undefined, { month: "long", day: "numeric" });
   return (
     <div className="px-4 pt-4 sm:px-6">
-      <Alert>
+      <Alert tone="warning">
         You&apos;ve used your {usage.limit} free video{usage.limit === 1 ? "" : "s"} for this month.{" "}
         <Link href="/join" className="font-medium underline underline-offset-4">
           Upgrade for unlimited videos
