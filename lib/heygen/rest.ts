@@ -39,8 +39,46 @@ export class HeygenFreeLimitError extends Error {
   }
 }
 
+/** HeyGen answered 5xx or could not be reached; trying again usually works. */
+export class HeygenBusyError extends Error {
+  constructor() {
+    super("heygen_busy");
+    this.name = "HeygenBusyError";
+  }
+}
+
+/** A step took longer than we are willing to keep the user waiting. */
+export class HeygenTimeoutError extends Error {
+  constructor() {
+    super("heygen_timeout");
+    this.name = "HeygenTimeoutError";
+  }
+}
+
+/** HeyGen could not make a twin from that picture. */
+export class HeygenPhotoRejectedError extends Error {
+  constructor() {
+    super("heygen_photo_rejected");
+    this.name = "HeygenPhotoRejectedError";
+  }
+}
+
+/** One plain sentence for any HeyGen failure; `fallback` for the unknown ones. */
+export function heygenErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof HeygenCredentialMissingError) return "HeyGen integration required. Ask the workspace owner to connect HeyGen.";
+  if (err instanceof HeygenFreeLimitError) return "You've used your free videos for this month. Upgrade for unlimited videos.";
+  if (err instanceof HeygenCreditsExhaustedError)
+    return "HeyGen doesn't have enough credits for this step. A video costs about 1 credit per minute; the workspace owner can add credits in HeyGen.";
+  if (err instanceof HeygenBusyError) return "HeyGen is busy right now. Please try again in a moment.";
+  if (err instanceof HeygenTimeoutError) return "This is taking longer than usual. Please try again in a moment.";
+  if (err instanceof HeygenPhotoRejectedError) return "HeyGen couldn't use that picture. Try a clear, front-facing photo of one person.";
+  if (err instanceof Error && /413|too large/i.test(err.message)) return "File too large. Please use a smaller file.";
+  return fallback;
+}
+
 async function failure(path: string, res: Response): Promise<Error> {
   const text = await res.text().catch(() => "");
+  if (res.status >= 500) return new HeygenBusyError();
   if (isInsufficientCredit(text)) {
     window.dispatchEvent(new Event(HEYGEN_CREDITS_EVENT));
     return new HeygenCreditsExhaustedError();
@@ -59,7 +97,7 @@ async function failure(path: string, res: Response): Promise<Error> {
 }
 
 /** Paths whose success counts against the free plan; the banner is told at once. */
-const GENERATIONS = new Set(["/v2/video/generate", "/v3/videos", "/v2/photo_avatar/train"]);
+const GENERATIONS = new Set(["/v2/video/generate", "/v3/videos"]);
 
 function authHeaders(): Record<string, string> {
   const token = typeof window === "undefined" ? "" : localStorage.getItem("dm_token") ?? "";
@@ -67,6 +105,23 @@ function authHeaders(): Record<string, string> {
   const platform = resolveAppTenant();
   if (!platform) throw new Error("heygen: no tenant resolved");
   return { Authorization: `Token ${token}`, "X-Platform": platform };
+}
+
+const REQUEST_TIMEOUT_MS = 60_000;
+const UPLOAD_TIMEOUT_MS = 180_000;
+
+/** fetch that gives up (HeygenTimeoutError) or reports the network as busy instead of hanging. */
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw new HeygenTimeoutError();
+    throw new HeygenBusyError();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function request<T>(
@@ -87,7 +142,7 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(url.toString(), { method: init.method ?? "GET", headers, body });
+  const res = await fetchWithTimeout(url.toString(), { method: init.method ?? "GET", headers, body });
   if (res.status === 424) throw new HeygenCredentialMissingError();
   if (!res.ok) throw await failure(path, res);
   if ((init.method ?? "GET") === "POST" && GENERATIONS.has(path))
@@ -223,12 +278,12 @@ export async function listHeygenVoices(): Promise<HeygenVoice[]> {
 // ─────────────────────────────────────────────────────────────────────
 // Assets + photo twins (HeyGen "photo avatar" groups)
 //
-// Create Twin pipeline, matching iblai/video:
+// Create Twin pipeline:
 //   1. POST /v1/asset                              (upload.heygen.com) → {id, image_key, url}
 //   2. POST /v2/photo_avatar/avatar_group/create   {name, image_key}   → {group_id}
-//   3. GET  /v2/avatar_group/{group_id}/avatars    poll until look status === "completed"
-//   4. POST /v2/photo_avatar/train                 {group_id}
-// The trained group is then usable as an avatar_id in /v2/video/generate.
+//   3. GET  /v2/avatar_group/{group_id}/avatars    poll until the look's status === "completed"
+// The look is a talking photo, usable at once as talking_photo_id in
+// /v2/video/generate. No training: it costs credits and adds nothing here.
 
 export interface HeygenUploadedAsset {
   id: string;
@@ -238,15 +293,19 @@ export interface HeygenUploadedAsset {
 }
 
 export async function uploadHeygenAsset(file: File | Blob): Promise<HeygenUploadedAsset> {
-  const res = await fetch(`${API_BASE}/v1/asset`, {
-    method: "POST",
-    headers: {
-      ...authHeaders(),
-      "Content-Type": file.type || "application/octet-stream",
-      Accept: "application/json",
+  const res = await fetchWithTimeout(
+    `${API_BASE}/v1/asset`,
+    {
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": file.type || "application/octet-stream",
+        Accept: "application/json",
+      },
+      body: file,
     },
-    body: file,
-  });
+    UPLOAD_TIMEOUT_MS,
+  );
   if (res.status === 424) throw new HeygenCredentialMissingError();
   if (!res.ok) throw await failure("/v1/asset", res);
   return unwrap(await res.json());
@@ -287,39 +346,26 @@ export async function getPhotoAvatarLook(groupId: string): Promise<HeygenPhotoAv
   return look;
 }
 
-export async function trainPhotoAvatarGroup(groupId: string): Promise<void> {
-  try {
-    await request("/v2/photo_avatar/train", { method: "POST", body: { group_id: groupId } });
-  } catch (err) {
-    // HeyGen has answered 400 "Training already in progress" to the very request
-    // that started the training; the twin is training either way.
-    if (err instanceof Error && /already in progress/i.test(err.message)) return;
-    throw err;
-  }
-}
-
-/** HeyGen's training state for a twin: "pending", "ready" or "failed" (anything else reads as pending). */
-export async function getTwinTrainingStatus(groupId: string): Promise<string> {
-  const data = unwrap<{ status?: string }>(
-    await request(`/v2/photo_avatar/train/status/${encodeURIComponent(groupId)}`),
-  );
-  return String(data?.status ?? "pending");
-}
-
-/** Wait for the uploaded photo to finish processing, then kick off training. */
-export async function finalizeAndTrain(
+/**
+ * Wait until HeyGen has processed the uploaded picture into a look. Transient
+ * poll failures are retried until the deadline; a rejected picture and a
+ * deadline are reported as their own errors.
+ */
+export async function waitForLook(
   groupId: string,
   { intervalMs = 2000, timeoutMs = 90_000 } = {},
-): Promise<void> {
+): Promise<HeygenPhotoAvatarLook> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const look = await getPhotoAvatarLook(groupId);
-    if (look.status === "completed") break;
-    if (look.status === "failed") throw new Error("HeyGen photo processing failed");
-    if (Date.now() > deadline) throw new Error("HeyGen photo processing timed out");
+    const look = await getPhotoAvatarLook(groupId).catch((err: unknown) => {
+      if (err instanceof HeygenCredentialMissingError) throw err;
+      return null;
+    });
+    if (look?.status === "completed") return look;
+    if (look?.status === "failed") throw new HeygenPhotoRejectedError();
+    if (Date.now() > deadline) throw new HeygenTimeoutError();
     await new Promise((r) => setTimeout(r, intervalMs));
   }
-  await trainPhotoAvatarGroup(groupId);
 }
 
 // ─────────────────────────────────────────────────────────────────────

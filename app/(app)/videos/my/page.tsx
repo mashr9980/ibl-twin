@@ -28,12 +28,11 @@ const CHIPS: { key: Chip; label: string }[] = [
 ];
 const POLL_MS = 5000;
 /**
- * A render that has sat pending for hours is not coming back — this account
- * has one stuck since 3,300 hours ago. Without a cutoff the poller chases it
- * forever and the "+N generating" chip never clears. Twin applies the same
- * three-hour rule.
+ * A render still pending after half an hour is not coming back (HeyGen
+ * normally finishes in minutes). Without a cutoff the poller chases it
+ * forever and the "+N generating" chip never clears.
  */
-const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 30 * 60 * 1000;
 
 type Row = HeygenVideo & { kind: VideoKind; localTitle?: string };
 
@@ -73,13 +72,17 @@ function MyVideosInner() {
   const [shareFor, setShareFor] = useState<Row | null>(null);
 
   const load = useCallback(async () => {
+    // The HeyGen key is shared by the whole workspace: show only the videos
+    // made from this browser, not everyone's.
     const local = new Map(listLocalVideos(tenant).map((v) => [v.id, v]));
     const { data } = await listVideos({ limit: 100 });
     setRows(
-      data.map((v) => {
-        const l = local.get(v.id);
-        return { ...v, kind: l?.kind ?? "avatar", localTitle: l?.title };
-      }),
+      data
+        .filter((v) => local.has(v.id))
+        .map((v) => {
+          const l = local.get(v.id)!;
+          return { ...v, kind: l.kind, localTitle: l.title };
+        }),
     );
   }, [tenant]);
 
@@ -243,7 +246,13 @@ function MyVideosInner() {
 
                       {!done && (
                         <span
-                          title={isStale(v) ? "This render has been pending for hours and is unlikely to finish." : undefined}
+                          title={
+                            v.status === "failed"
+                              ? "HeyGen could not render this video. Delete it and try again."
+                              : isStale(v)
+                                ? "HeyGen has not finished this render in 30 minutes. It is unlikely to finish; delete it and try again."
+                                : undefined
+                          }
                           className={cn(
                             "pointer-events-none absolute bottom-2 left-2 z-20 rounded-[5px] px-1.5 py-0.5 text-[9px] font-medium leading-none text-white sm:text-[10px]",
                             v.status === "failed" ? "bg-red-500" : isStale(v) ? "bg-[var(--content-caption)]" : "bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)]",

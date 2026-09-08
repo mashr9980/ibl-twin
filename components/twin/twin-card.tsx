@@ -1,27 +1,15 @@
 "use client";
 
-// The user's own twin: picture, training state from HeyGen, and the way to
-// make a video with it. Shown on My Videos → Twin and on Create Twin.
+// The user's own twin: picture and the way to make a video with it.
+// Shown on My Videos → Twin and on Create Twin.
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clapperboard, Trash2 } from "lucide-react";
 
 import { GenerateModal } from "@/components/twin/generate-modal";
-import { getPhotoAvatarLook, getTwinTrainingStatus, type HeygenAvatar } from "@/lib/heygen/rest";
+import { getPhotoAvatarLook, type HeygenAvatar } from "@/lib/heygen/rest";
 import type { LocalTwin } from "@/lib/twin/local-library";
-import { cn } from "@/lib/utils";
-
-const POLL_MS = 10_000;
-
-type Training = "checking" | "pending" | "ready" | "failed";
-
-const STATUS: Record<Training, { label: string; className: string }> = {
-  checking: { label: "Checking…", className: "bg-[var(--canvas-muted)] text-[var(--content-caption)]" },
-  pending: { label: "Training… usually a few minutes", className: "bg-[#fff7e6] text-[#8a5a00]" },
-  ready: { label: "Ready", className: "bg-[#e8f7ee] text-[#2f7a4a]" },
-  failed: { label: "Training failed", className: "bg-[#fdecec] text-[#b42318]" },
-};
 
 const OUTLINE_BTN =
   "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-4 text-[13px] font-normal text-[var(--content-title)] shadow-sm transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-50";
@@ -40,7 +28,6 @@ export function TwinCard({
   onGenerated?: () => void;
   showLibraryLink?: boolean;
 }) {
-  const [training, setTraining] = useState<Training>("checking");
   const [open, setOpen] = useState(false);
   // HeyGen's picture links expire, so the look is re-read each time the card mounts.
   const [image, setImage] = useState<string | null>(twin.imageUrl ?? null);
@@ -52,23 +39,6 @@ export function TwinCard({
       .catch(() => {});
     return () => {
       cancelled = true;
-    };
-  }, [twin.groupId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const ask = async () => {
-      const status = await getTwinTrainingStatus(twin.groupId).catch(() => "pending");
-      if (cancelled) return;
-      const next: Training = status === "ready" ? "ready" : status === "failed" ? "failed" : "pending";
-      setTraining(next);
-      if (next === "pending") timer = setTimeout(ask, POLL_MS);
-    };
-    void ask();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
     };
   }, [twin.groupId]);
 
@@ -94,16 +64,13 @@ export function TwinCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold text-[var(--content-title)] sm:text-base">{twin.name}</h2>
-            <span className={cn("rounded-full px-2.5 py-0.5 text-[12px] font-medium", STATUS[training].className)}>
-              {STATUS[training].label}
-            </span>
+            <span className="rounded-full bg-[#e8f7ee] px-2.5 py-0.5 text-[12px] font-medium text-[#2f7a4a]">Ready</span>
           </div>
           <p className="mt-1 text-[12.5px] text-[var(--content-caption)]">
             Your twin speaks any script you write, in the voice you pick.
-            {training === "pending" ? " Videos made before training finishes use the photo as it is." : ""}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={PRIMARY_BTN} onClick={() => setOpen(true)} disabled={training === "failed"}>
+            <button type="button" className={PRIMARY_BTN} onClick={() => setOpen(true)}>
               <Clapperboard className="size-4" strokeWidth={1.75} />
               Create video with my twin
             </button>

@@ -2,7 +2,7 @@
 
 /**
  * Create Twin — twin.memorare.ai's home screen (teardown §2.1).
- * Photo or video → HeyGen photo-avatar group → trained twin, one per account.
+ * Photo or video → HeyGen photo-avatar look → a twin ready at once, one per account.
  */
 
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -18,12 +18,11 @@ import { GenerateModal } from "@/components/twin/generate-modal";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
 import {
   createPhotoAvatarGroup,
-  finalizeAndTrain,
+  heygenErrorMessage,
   uploadHeygenAsset,
-  HeygenCredentialMissingError,
-  HeygenCreditsExhaustedError,
-  HeygenFreeLimitError,
-  type HeygenAvatar, getPhotoAvatarLook } from "@/lib/heygen/rest";
+  waitForLook,
+  type HeygenAvatar,
+} from "@/lib/heygen/rest";
 import { getLocalTwin, setLocalTwin } from "@/lib/twin/local-library";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
@@ -76,6 +75,7 @@ function Dropzone({
   Icon,
   title,
   progress,
+  stage,
   badge,
   helper,
   accept,
@@ -86,6 +86,8 @@ function Dropzone({
 }: {
   Icon: LucideIcon;
   progress?: number | null;
+  /** What is happening while `progress` is shown. */
+  stage?: string;
   title: string;
   badge?: string;
   helper: string;
@@ -121,7 +123,7 @@ function Dropzone({
             </span>
           )}
         </div>
-        <p className="mt-1 text-[10px] leading-snug text-[var(--brand)] sm:text-[11px]">You can create one twin per account.</p>
+        <p className="mt-1 text-[10px] leading-snug text-[var(--brand)] sm:text-[11px]">One twin per account; a new upload replaces it.</p>
       </div>
 
       <div
@@ -140,7 +142,7 @@ function Dropzone({
         {progress != null ? (
           <div className="upload-progress-enter flex w-full max-w-[280px] flex-col items-center gap-3.5">
             <p className="text-xs font-medium text-[var(--card-foreground)] sm:text-[13px]">
-              Uploading
+              {stage || "Uploading"}
               <span className="inline-flex w-[1.1em] translate-y-px" aria-hidden="true">
                 <span className="upload-progress-dot">.</span>
                 <span className="upload-progress-dot [animation-delay:160ms]">.</span>
@@ -220,6 +222,7 @@ function CreateTwinInner() {
   const [busySource, setBusySource] = useState<"photo" | "video" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<HeygenAvatar | null>(null);
+  const lastAttempt = useRef<{ source: Blob; kind: "photo" | "video"; imageUrl?: string } | null>(null);
 
   // Twin's upload bar creeps forward in ~12% random steps every 400ms, capped
   // at 85% until the request resolves, then jumps to 100.
@@ -229,74 +232,88 @@ function CreateTwinInner() {
     return () => clearTimeout(t);
   }, [progress]);
 
-  async function createTwin(source: Blob, name: string, imageUrl?: string) {
-    if (existing) {
-      setError("You already have a twin. Delete your existing twin before creating another.");
+  async function createTwin(source: Blob, kind: "photo" | "video", imageUrl?: string) {
+    if (existing && !confirm("Replace your current twin? Videos already made with it stay.")) {
+      setBusySource(null);
       return;
     }
+    lastAttempt.current = { source, kind, imageUrl };
     setError(null);
+    setBusySource(kind);
     setProgress(2);
     try {
-      setStage("Uploading…");
+      setStage("Uploading your picture");
       const asset = await uploadHeygenAsset(source);
       if (!asset.image_key) throw new Error("Upload returned no image key");
-      setStage("Creating your twin…");
-      const group = await createPhotoAvatarGroup({ name, image_key: asset.image_key });
-      setStage("Training…");
-      await finalizeAndTrain(group.group_id);
-      const look = await getPhotoAvatarLook(group.group_id).catch(() => null);
+      setStage("Preparing your twin");
+      const group = await createPhotoAvatarGroup({ name: "My Twin", image_key: asset.image_key });
+      const look = await waitForLook(group.group_id);
+      setStage("Your twin is ready");
       setProgress(100);
-      setLocalTwin(tenant, {
+      const twin = {
         groupId: group.group_id,
-        lookId: look?.id ?? group.group_id,
-        name,
-        imageUrl: imageUrl ?? asset.url,
+        lookId: look.id ?? group.group_id,
+        name: "My Twin",
+        imageUrl: imageUrl ?? look.image_url ?? asset.url,
         createdAt: Date.now(),
-      });
-      setExisting(getLocalTwin(tenant));
+      };
+      setLocalTwin(tenant, twin);
+      setExisting(twin);
+      // Let the bar reach 100% before the library opens.
+      await new Promise((r) => setTimeout(r, 700));
       router.push("/videos/my?type=twin");
     } catch (err) {
       setProgress(null);
       setBusySource(null);
       setStage("");
-      if (err instanceof HeygenCredentialMissingError) setError("HeyGen integration required.");
-      else if (err instanceof HeygenFreeLimitError) setError("You've used your free videos for this month. Upgrade for unlimited videos.");
-      else if (err instanceof HeygenCreditsExhaustedError) setError("HeyGen doesn't have enough credits for this step. Creating a twin uses about 3 credits and a video about 1 credit per minute; the workspace owner can add credits in HeyGen.");
-      else if (err instanceof Error && /413|too large/i.test(err.message)) setError("File too large. Please use a smaller file.");
-      else setError(`Upload failed${err instanceof Error && err.message ? ` (${err.message.slice(0, 80)})` : ""}.`);
+      setError(heygenErrorMessage(err, "We couldn't create your twin. Please try again."));
     }
+  }
+
+  function retry() {
+    const last = lastAttempt.current;
+    if (last) void createTwin(last.source, last.kind, last.imageUrl);
   }
 
   function onPhoto(file: File) {
     if (!PHOTO_TYPES.includes(file.type)) return setError("Supported formats: JPG, PNG, GIF, WEBP.");
     if (file.size > PHOTO_MAX) return setError("File too large. Please use a smaller file.");
-    setBusySource("photo");
-    void createTwin(file, "My Twin");
+    void createTwin(file, "photo");
   }
 
   async function onVideo(file: File) {
-    setBusySource("video");
     if (!VIDEO_TYPES.includes(file.type)) return setError("Supported formats: MP4, MOV, WEBM.");
     if (file.size > VIDEO_MAX) return setError("File too large. Please use a smaller file.");
+    setBusySource("video");
+    setProgress(1);
+    setStage("Reading your video");
     try {
       const frame = await firstFrame(file);
-      void createTwin(frame, "My Twin");
+      void createTwin(frame, "video");
     } catch (e) {
+      setProgress(null);
+      setBusySource(null);
+      setStage("");
       setError(e instanceof Error ? e.message : "Could not read that video.");
     }
   }
 
   async function onUrl(url: string) {
-    setBusySource("photo");
     if (!/^https?:\/\//i.test(url)) return setError("Only http(s) image URLs are supported.");
+    setBusySource("photo");
+    setProgress(1);
+    setStage("Fetching your picture");
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error();
       const blob = await res.blob();
-      if (!PHOTO_TYPES.includes(blob.type)) return setError("Supported formats: JPG, PNG, GIF, WEBP.");
-      void createTwin(blob, "My Twin", url);
-    } catch {
-      setError("Could not download that image URL.");
+      if (!PHOTO_TYPES.includes(blob.type)) throw new Error("Supported formats: JPG, PNG, GIF, WEBP.");
+      void createTwin(blob, "photo", url);
+    } catch (e) {
+      setProgress(null);
+      setBusySource(null);
+      setStage("");
+      setError(e instanceof Error && e.message ? e.message : "Could not download that image URL.");
     }
   }
 
@@ -339,12 +356,20 @@ function CreateTwinInner() {
           )}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Dropzone progress={busySource === "photo" ? progress : null} Icon={ImageIcon} title="Start with a photo" helper="Supported formats: JPG, PNG, GIF, WEBP. Max size: 10MB." accept="image/jpeg,image/png,image/gif,image/webp" buttonLabel="Upload Photo" onFile={onPhoto} onUrl={onUrl} disabled={busy} />
-            <Dropzone progress={busySource === "video" ? progress : null} Icon={VideoIcon} title="Start with video" badge="Most realistic" helper="Supported formats: MP4, MOV, WEBM. Max size: 100MB." accept="video/mp4,video/quicktime,video/webm" buttonLabel="Upload Video" onFile={onVideo} disabled={busy} />
+            <Dropzone progress={busySource === "photo" ? progress : null} stage={stage} Icon={ImageIcon} title="Start with a photo" helper="Supported formats: JPG, PNG, GIF, WEBP. Max size: 10MB." accept="image/jpeg,image/png,image/gif,image/webp" buttonLabel="Upload Photo" onFile={onPhoto} onUrl={onUrl} disabled={busy} />
+            <Dropzone progress={busySource === "video" ? progress : null} stage={stage} Icon={VideoIcon} title="Start with video" badge="Most realistic" helper="Supported formats: MP4, MOV, WEBM. Max size: 100MB." accept="video/mp4,video/quicktime,video/webm" buttonLabel="Upload Video" onFile={onVideo} disabled={busy} />
           </div>
           {error && (
-            <Alert className="mt-4" onDismiss={() => setError(null)}>
+            <Alert className="mt-4" tone="warning" onDismiss={() => setError(null)}>
               {error}
+              {lastAttempt.current && (
+                <>
+                  {" "}
+                  <button type="button" onClick={retry} className="font-medium underline underline-offset-4">
+                    Try again
+                  </button>
+                </>
+              )}
             </Alert>
           )}
 

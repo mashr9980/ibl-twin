@@ -19,12 +19,7 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  createVideo,
-  listHeygenVoices,
-  type HeygenAvatar,
-  type HeygenVoice,
-  type Orientation, HeygenCreditsExhaustedError, HeygenFreeLimitError } from "@/lib/heygen/rest";
+import { createVideo, listHeygenVoices, type HeygenAvatar, type HeygenVoice, type Orientation, heygenErrorMessage } from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
@@ -134,13 +129,7 @@ export function GenerateModal({
       onGenerated?.();
       router.push(`/videos/my?type=${kind}`);
     } catch (err) {
-      setError(
-        err instanceof HeygenFreeLimitError
-          ? "You've used your free videos for this month. Upgrade for unlimited videos."
-          : err instanceof HeygenCreditsExhaustedError
-            ? "HeyGen doesn't have enough credits for this step. Creating a twin uses about 3 credits and a video about 1 credit per minute; the workspace owner can add credits in HeyGen."
-            : "Video generation failed. Please try again.",
-      );
+      setError(heygenErrorMessage(err, "Video generation failed. Please try again."));
       setBusy(false);
     }
   }

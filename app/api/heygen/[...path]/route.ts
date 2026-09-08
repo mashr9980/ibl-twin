@@ -39,9 +39,7 @@ function upstreamBaseFor(path: string[]): string {
 /** The calls that produce a video (or train a twin): each counts as one against the free allowance. */
 export function isGeneration(method: string, relPath: string): boolean {
   if (method !== "POST") return false;
-  return (
-    relPath === "v2/video/generate" || relPath === "v3/videos" || relPath === "v2/photo_avatar/train"
-  );
+  return relPath === "v2/video/generate" || relPath === "v3/videos";
 }
 
 /**

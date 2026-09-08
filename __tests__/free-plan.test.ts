@@ -146,7 +146,7 @@ describe("HeyGen proxy metering", () => {
     const { POST, isGeneration } = await loadProxy();
     expect(isGeneration("POST", "v2/video/generate")).toBe(true);
     expect(isGeneration("POST", "v3/videos")).toBe(true);
-    expect(isGeneration("POST", "v2/photo_avatar/train")).toBe(true);
+    expect(isGeneration("POST", "v2/photo_avatar/train")).toBe(false);
     expect(isGeneration("POST", "v1/asset")).toBe(false);
     expect(isGeneration("GET", "v2/video/generate")).toBe(false);
 

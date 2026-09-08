@@ -2,24 +2,33 @@ import "./helpers/browser-stub";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createVideo, getTwinTrainingStatus, trainPhotoAvatarGroup } from "@/lib/heygen/rest";
+import {
+  createVideo,
+  HeygenBusyError,
+  HeygenCreditsExhaustedError,
+  HeygenPhotoRejectedError,
+  HeygenTimeoutError,
+  heygenErrorMessage,
+  waitForLook,
+} from "@/lib/heygen/rest";
 
 const calls: { url: string; init: RequestInit }[] = [];
-let trainAnswer: { status: number; body: unknown } = { status: 200, body: { data: null } };
+let lookAnswers: unknown[] = [];
 
 beforeEach(() => {
   calls.length = 0;
+  lookAnswers = [];
   localStorage.setItem("dm_token", "t");
   localStorage.setItem("app_tenant", "tenant1");
   (globalThis as any).dispatchEvent = () => true;
   vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
     calls.push({ url, init });
-    if (url.endsWith("/v2/photo_avatar/train"))
-      return new Response(JSON.stringify(trainAnswer.body), { status: trainAnswer.status });
-    const body = url.includes("train/status")
-      ? { data: { status: "ready" } }
-      : { data: { video_id: "vid1" } };
-    return new Response(JSON.stringify(body), { status: 200 });
+    if (url.includes("/avatars")) {
+      const next = lookAnswers.shift();
+      if (next instanceof Response) return next;
+      return new Response(JSON.stringify({ data: { avatar_list: next ? [next] : [] } }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ data: { video_id: "vid1" } }), { status: 200 });
   });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -40,22 +49,39 @@ describe("createVideo", () => {
     expect(sent.video_inputs[0].character).toEqual({ type: "talking_photo", talking_photo_id: "look1" });
     expect(calls[0].url).toContain("/api/heygen/v2/video/generate");
   });
-});
 
-describe("getTwinTrainingStatus", () => {
-  it("reads HeyGen's training state for the group", async () => {
-    expect(await getTwinTrainingStatus("g1")).toBe("ready");
-    expect(calls[0].url).toContain("/v2/photo_avatar/train/status/g1");
+  it("reports a HeyGen outage as busy", async () => {
+    vi.stubGlobal("fetch", async () => new Response("upstream down", { status: 503 }));
+    await expect(createVideo({ ...base, avatar_id: "a1" })).rejects.toBeInstanceOf(HeygenBusyError);
   });
 });
 
-describe("trainPhotoAvatarGroup", () => {
-  it("treats HeyGen's 'already in progress' answer as started", async () => {
-    trainAnswer = { status: 400, body: { data: null, error: { code: "invalid_parameter", message: "Training already in progress" } } };
-    await expect(trainPhotoAvatarGroup("g1")).resolves.toBeUndefined();
+describe("waitForLook", () => {
+  it("rides out a transient poll failure and returns the finished look", async () => {
+    lookAnswers = [new Response("oops", { status: 502 }), { id: "l1", group_id: "g1", status: "pending" }, { id: "l1", group_id: "g1", status: "completed" }];
+    const look = await waitForLook("g1", { intervalMs: 1 });
+    expect(look.id).toBe("l1");
+    expect(calls.length).toBe(3);
   });
-  it("still surfaces other refusals", async () => {
-    trainAnswer = { status: 400, body: { error: { code: "invalid_parameter", message: "Group not found" } } };
-    await expect(trainPhotoAvatarGroup("g1")).rejects.toThrow(/Group not found/);
+
+  it("rejects a picture HeyGen could not use", async () => {
+    lookAnswers = [{ id: "l1", group_id: "g1", status: "failed" }];
+    await expect(waitForLook("g1", { intervalMs: 1 })).rejects.toBeInstanceOf(HeygenPhotoRejectedError);
+  });
+
+  it("gives up after the deadline", async () => {
+    lookAnswers = Array.from({ length: 50 }, () => ({ id: "l1", group_id: "g1", status: "pending" }));
+    await expect(waitForLook("g1", { intervalMs: 1, timeoutMs: 5 })).rejects.toBeInstanceOf(HeygenTimeoutError);
+  });
+});
+
+describe("heygenErrorMessage", () => {
+  it("turns each known failure into a plain sentence", () => {
+    expect(heygenErrorMessage(new HeygenBusyError(), "x")).toMatch(/busy/);
+    expect(heygenErrorMessage(new HeygenTimeoutError(), "x")).toMatch(/longer than usual/);
+    expect(heygenErrorMessage(new HeygenPhotoRejectedError(), "x")).toMatch(/picture/);
+    expect(heygenErrorMessage(new HeygenCreditsExhaustedError(), "x")).toMatch(/credits/);
+    expect(heygenErrorMessage(new Error("413 payload"), "x")).toMatch(/too large/);
+    expect(heygenErrorMessage(new Error("weird"), "fallback")).toBe("fallback");
   });
 });
