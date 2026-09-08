@@ -82,10 +82,12 @@ describe("masked credential detection", () => {
 });
 
 describe("creditsFromQuota", () => {
-  it("counts whole credits from HeyGen's sixtieths and flags less than one as low", () => {
-    expect(creditsFromQuota(358)).toEqual({ remaining: 5, low: false });
-    expect(creditsFromQuota(60)).toEqual({ remaining: 1, low: false });
-    expect(creditsFromQuota(58)).toEqual({ remaining: 0, low: true });
+  it("converts HeyGen's sixtieths to credits (one decimal) and flags under three as low", () => {
+    expect(creditsFromQuota(358)).toEqual({ remaining: 6, low: false });
+    expect(creditsFromQuota(180)).toEqual({ remaining: 3, low: false });
+    expect(creditsFromQuota(118)).toEqual({ remaining: 2, low: true });
+    expect(creditsFromQuota(108)).toEqual({ remaining: 1.8, low: true });
+    expect(creditsFromQuota(58)).toEqual({ remaining: 1, low: true });
     expect(creditsFromQuota(0)).toEqual({ remaining: 0, low: true });
   });
 

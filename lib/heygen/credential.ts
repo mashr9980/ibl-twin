@@ -73,16 +73,21 @@ export function isUsableKey(key: string | null | undefined): key is string {
 const QUOTA_PER_CREDIT = 60;
 
 export type HeygenCredits = {
+  /** A call was refused for lack of credits this session, whatever the balance says. */
+  refused?: boolean;
   /** Whole credits left, rounded down. */
   remaining: number;
   /** Too low to generate anything. */
   low: boolean;
 };
 
+/** Training a twin costs about three credits; below that the common actions start to fail. */
+const LOW_CREDITS = 3;
+
 export function creditsFromQuota(quota: number | null | undefined): HeygenCredits | null {
   if (typeof quota !== "number" || !Number.isFinite(quota)) return null;
-  const remaining = Math.max(0, Math.floor(quota / QUOTA_PER_CREDIT));
-  return { remaining, low: quota < QUOTA_PER_CREDIT };
+  const remaining = Math.max(0, Math.round((quota / QUOTA_PER_CREDIT) * 10) / 10);
+  return { remaining, low: remaining < LOW_CREDITS };
 }
 
 /** HeyGen's own words for an exhausted balance, anywhere in an error body. */

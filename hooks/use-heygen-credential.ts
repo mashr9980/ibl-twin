@@ -11,6 +11,8 @@ type Status = { state: HeygenCredentialState; credits: HeygenCredits | null };
 
 /** One probe per session, shared by every component that asks; re-asked when a call ran out of credits. */
 let cached: Promise<Status> | null = null;
+/** HeyGen refused a call for lack of credits this session: low, whatever the balance rounds to. */
+let refused = false;
 
 function probe(): Promise<Status> {
   if (cached) return cached;
@@ -48,6 +50,7 @@ function useHeygenStatus(): Status {
     ask();
     // A call just failed for lack of credits: the balance is stale, ask again.
     const refresh = () => {
+      refused = true;
       cached = null;
       ask();
     };
@@ -66,5 +69,6 @@ export function useHeygenCredential(): HeygenCredentialState {
 
 /** The workspace's HeyGen balance as the server last saw it; null while unknown. */
 export function useHeygenCredits(): HeygenCredits | null {
-  return useHeygenStatus().credits;
+  const { credits } = useHeygenStatus();
+  return credits ? { ...credits, low: credits.low || refused, refused } : null;
 }

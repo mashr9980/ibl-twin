@@ -12,8 +12,9 @@ export function CreditsBanner({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="px-4 pt-4 sm:px-6">
       <Alert>
-        Video generation is paused: this workspace&apos;s HeyGen credits are used up
-        {credits.remaining > 0 ? ` (${credits.remaining} left)` : ""}.{" "}
+        {credits.remaining > 0
+          ? `HeyGen credits are running low: ${credits.remaining} left. Creating a twin uses about 3 credits and a video about 1 credit per minute, so some requests will be refused.`
+          : "Video generation is paused: this workspace's HeyGen credits are used up."}{" "}
         {isAdmin ? (
           <>
             <a
@@ -24,7 +25,7 @@ export function CreditsBanner({ isAdmin }: { isAdmin: boolean }) {
             >
               Add credits in HeyGen
             </a>{" "}
-            and uploads work again.
+            to keep generating.
           </>
         ) : (
           "Ask the workspace owner to add credits."

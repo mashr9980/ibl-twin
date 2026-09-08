@@ -254,7 +254,7 @@ function CreateTwinInner() {
       setStage("");
       if (err instanceof HeygenCredentialMissingError) setError("HeyGen integration required.");
       else if (err instanceof HeygenFreeLimitError) setError("You've used your free videos for this month. Upgrade for unlimited videos.");
-      else if (err instanceof HeygenCreditsExhaustedError) setError("HeyGen credits are used up, so nothing can be generated right now. The workspace owner can add credits in HeyGen.");
+      else if (err instanceof HeygenCreditsExhaustedError) setError("HeyGen doesn't have enough credits for this step. Creating a twin uses about 3 credits and a video about 1 credit per minute; the workspace owner can add credits in HeyGen.");
       else if (err instanceof Error && /413|too large/i.test(err.message)) setError("File too large. Please use a smaller file.");
       else setError(`Upload failed${err instanceof Error && err.message ? ` (${err.message.slice(0, 80)})` : ""}.`);
     }
