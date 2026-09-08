@@ -37,7 +37,10 @@ export function GeneralSection({ tenantKey }: { tenantKey: string }) {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [logo, setLogo] = useState<string | null>(`${config.axdUrl()}/api/core/orgs/${tenantKey}/logo`);
+  // The gateway serves the workspace logo from the DM base, and only with the
+  // trailing slash; `/axd/…` is refused outright.
+  const logoUrl = `${config.dmUrl()}/api/core/orgs/${tenantKey}/logo/`;
+  const [logo, setLogo] = useState<string | null>(logoUrl);
   const [notice, setNotice] = useState<{ tone: "info" | "warning"; text: string } | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
@@ -56,7 +59,7 @@ export function GeneralSection({ tenantKey }: { tenantKey: string }) {
     form.append("file", picked, picked.name);
     try {
       await uploadLogo({ org: tenantKey, formData: form } as never).unwrap();
-      setLogo(`${config.axdUrl()}/api/core/orgs/${tenantKey}/logo?v=${Date.now()}`);
+      setLogo(`${logoUrl}?v=${Date.now()}`);
       setNotice({ tone: "info", text: "Workspace picture updated." });
     } catch {
       setNotice({ tone: "warning", text: "Couldn't upload that image. Please try again." });
