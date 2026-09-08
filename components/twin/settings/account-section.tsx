@@ -155,7 +155,7 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
       <section className="space-y-3">
         <span className={LABEL}>Profile Picture</span>
         <div className="flex items-center gap-4 sm:gap-5">
-          <span className="relative flex size-20 shrink-0 overflow-hidden rounded-full border border-border bg-card">
+          <span className="relative flex size-20 shrink-0 overflow-hidden rounded-full border border-[var(--border)] bg-[var(--card)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="aspect-square h-full w-full object-cover" alt={username} src={picture ?? "/images/user-profile.png"} />
           </span>
@@ -250,16 +250,16 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
               data-state="unchecked"
               aria-label="Toggle two-factor authentication"
               onClick={() => setNotice({ tone: "warning", text: "Two-factor sign-in isn't available on this workspace yet." })}
-              className="peer group/switch inline-flex h-[1.15rem] w-8 shrink-0 items-center rounded-full border border-transparent bg-input shadow-xs outline-none transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/80"
+              className="peer group/switch inline-flex h-[1.15rem] w-8 shrink-0 items-center rounded-full border border-transparent bg-[var(--input)] shadow-xs outline-none transition-all focus-visible:border-[var(--ring)] focus-visible:ring-[3px] focus-visible:ring-[color-mix(in_oklab,var(--ring)_50%,transparent)] dark:bg-[color-mix(in_oklab,var(--input)_80%,transparent)]"
             >
-              <span className="pointer-events-none block size-4 translate-x-0 rounded-full bg-background ring-0 transition-transform dark:bg-foreground" />
+              <span className="pointer-events-none block size-4 translate-x-0 rounded-full bg-[var(--background)] ring-0 transition-transform dark:bg-[var(--foreground)]" />
             </button>
           </div>
         </div>
         <p className={HINT}>2FA is disabled on your account.</p>
       </section>
 
-      <div className="border-t border-border pt-8">
+      <div className="border-t border-[var(--border)] pt-8">
         <section className="space-y-3">
           <span className={LABEL}>Connected accounts</span>
           <button
@@ -275,7 +275,7 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
         </section>
       </div>
 
-      <div className="border-t border-border pt-8">
+      <div className="border-t border-[var(--border)] pt-8">
         {confirmDelete ? (
           <div className="space-y-3 rounded-lg border border-[#f2b544]/70 bg-[#fff7e6] p-4 text-[#8a5a00]">
             <p className="text-sm">Delete your account? Your profile is scheduled for removal and you are signed out. This cannot be undone.</p>

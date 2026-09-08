@@ -9,22 +9,27 @@ import {
   useUpdateUserPlatformMetadataMutation,
 } from "@iblai/iblai-js/data-layer";
 
+/** The locales the SDK ships catalogues for. */
+export const LANGUAGES = [
+  { value: "en", flag: "🇺🇸", label: "English" },
+  { value: "fr", flag: "🇫🇷", label: "Français" },
+  { value: "es", flag: "🇪🇸", label: "Español" },
+  { value: "zh", flag: "🇨🇳", label: "中文" },
+] as const;
+
+export type Language = (typeof LANGUAGES)[number]["value"];
 export type Theme = "light" | "dark" | "system";
 export type ShowMeAs = "email" | "username" | "name";
 
 export interface TwinPreferences {
   theme: Theme;
-  orientation: "landscape" | "portrait";
-  voiceId: string;
-  speed: number;
+  language: Language;
   showMeAs: ShowMeAs;
 }
 
 export const DEFAULT_PREFERENCES: TwinPreferences = {
   theme: "system",
-  orientation: "landscape",
-  voiceId: "",
-  speed: 1,
+  language: "en",
   showMeAs: "email",
 };
 
@@ -42,8 +47,10 @@ export function applyTheme(theme: Theme) {
 }
 
 export function useTwinPreferences(tenantKey: string) {
-  const query = useGetUserPlatformMetadataQuery({ tenantKey } as never, { skip: !tenantKey });
+  const signedIn = typeof window !== "undefined" && !!localStorage.getItem("dm_token");
+  const query = useGetUserPlatformMetadataQuery({ tenantKey } as never, { skip: !tenantKey || !signedIn });
   const [update, state] = useUpdateUserPlatformMetadataMutation();
+
   const metadata = useMemo<Metadata>(
     () => ((query.data as { metadata?: Metadata } | undefined)?.metadata ?? {}) as Metadata,
     [query.data],
@@ -51,6 +58,7 @@ export function useTwinPreferences(tenantKey: string) {
 
   const prefs = useMemo<TwinPreferences>(() => ({ ...DEFAULT_PREFERENCES, ...metadata.twin }), [metadata]);
 
+  // The platform replaces top-level metadata keys, so the whole `twin` object goes with every save.
   const save = useCallback(
     async (patch: Partial<TwinPreferences>) => {
       const next: Metadata = { ...metadata, twin: { ...metadata.twin, ...patch } };

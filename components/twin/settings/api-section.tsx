@@ -8,7 +8,7 @@ import { Copy } from "lucide-react";
 
 import { Alert } from "@/components/twin/alert";
 import config from "@/lib/iblai/config";
-import { FIELD, HINT, LABEL, OUTLINE_BTN, PRIMARY_BTN } from "./ui";
+import { FIELD, HINT, FIELD_LABEL, OUTLINE_BTN, PRIMARY_BTN } from "./ui";
 
 type Token = { name: string; username: string; created: string; expires: string | null; mode?: string };
 
@@ -92,7 +92,7 @@ export function ApiSection({ tenantKey }: { tenantKey: string }) {
       )}
 
       <section className="space-y-3">
-        <label className={LABEL} htmlFor="api-token-name">New token</label>
+        <label className={FIELD_LABEL} htmlFor="api-token-name">New token</label>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input id="api-token-name" className={FIELD} placeholder="production-server" value={name} onChange={(e) => setName(e.target.value)} />
           <button type="button" onClick={create} disabled={busy || !name.trim()} className={PRIMARY_BTN}>
@@ -102,7 +102,7 @@ export function ApiSection({ tenantKey }: { tenantKey: string }) {
       </section>
 
       <section className="space-y-3">
-        <span className={LABEL}>Existing tokens</span>
+        <span className={FIELD_LABEL}>Existing tokens</span>
         {tokens === null ? (
           <p className={HINT}>Loading…</p>
         ) : tokens.length === 0 ? (

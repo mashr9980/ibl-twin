@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Provider as ReduxProvider } from "react-redux";
 import { usePathname } from "next/navigation";
 import { initializeDataLayer, type TokenResponse } from "@iblai/iblai-js/data-layer";
+
+import { PreferencesProvider } from "@/components/twin/preferences-provider";
 import {
   AuthProvider,
   TenantProvider,
@@ -220,7 +222,7 @@ export function IblaiProviders({ children }: { children: ReactNode }) {
           username={username}
           fallback={LOADING}
         >
-          {children}
+          <PreferencesProvider>{children}</PreferencesProvider>
         </TenantProvider>
       </AuthProvider>
     </ReduxProvider>

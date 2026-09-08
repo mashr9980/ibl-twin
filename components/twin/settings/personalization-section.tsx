@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Alert } from "@/components/twin/alert";
 import { useTwinPreferences, type ShowMeAs } from "@/hooks/use-twin-preferences";
 import { getTwin, setTwin, type LocalTwin } from "@/lib/twin/local-library";
-import { FIELD, HINT, LABEL, PRIMARY_BTN } from "./ui";
+import { FIELD, HINT, FIELD_LABEL, PRIMARY_BTN } from "./ui";
 
 const SHOW_AS: { value: ShowMeAs; label: string }[] = [
   { value: "email", label: "My email" },
@@ -54,7 +54,7 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
       )}
 
       <section className="space-y-3">
-        <span className={LABEL}>Show me in the sidebar as</span>
+        <span className={FIELD_LABEL}>Show me in the sidebar as</span>
         <div className="flex flex-wrap gap-2">
           {SHOW_AS.map((o) => (
             <button
@@ -76,7 +76,7 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
       </section>
 
       <section className="space-y-3">
-        <label className={LABEL} htmlFor="twin-name">Your twin&apos;s name</label>
+        <label className={FIELD_LABEL} htmlFor="twin-name">Your twin&apos;s name</label>
         {twin ? (
           <div className="flex flex-col gap-2 sm:flex-row">
             <input id="twin-name" className={FIELD} value={twinName} onChange={(e) => setTwinName(e.target.value)} maxLength={60} />

@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useHeygenCredits } from "@/hooks/use-heygen-credential";
 import { fetchUsage, type AllowanceView } from "@/lib/paywall-client";
 import { loadLibrary, type LocalVideo } from "@/lib/twin/local-library";
-import { HINT, LABEL, OUTLINE_BTN } from "./ui";
+import { HINT, FIELD_LABEL, OUTLINE_BTN } from "./ui";
 
 const KIND: Record<LocalVideo["kind"], string> = { twin: "Twin", avatar: "Avatar", clip: "Video Clip" };
 
@@ -31,7 +31,7 @@ export function UsageSection({ isAdmin, onClose }: { isAdmin: boolean; onClose: 
 
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
-          <span className={LABEL}>Your plan</span>
+          <span className={FIELD_LABEL}>Your plan</span>
           {!usage ? (
             <p className={`${HINT} mt-2`}>Loading…</p>
           ) : usage.tier === "free" && usage.limit !== null ? (
@@ -58,7 +58,7 @@ export function UsageSection({ isAdmin, onClose }: { isAdmin: boolean; onClose: 
 
         {isAdmin && (
           <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
-            <span className={LABEL}>HeyGen credits</span>
+            <span className={FIELD_LABEL}>HeyGen credits</span>
             <p className="mt-2 text-2xl font-semibold text-[var(--content-title)]">
               {credits ? credits.remaining : "…"}
               <span className="text-base font-normal text-[var(--muted-foreground)]"> left</span>
@@ -73,7 +73,7 @@ export function UsageSection({ isAdmin, onClose }: { isAdmin: boolean; onClose: 
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className={LABEL}>Your videos</span>
+          <span className={FIELD_LABEL}>Your videos</span>
           <Link href="/videos/my" onClick={onClose} className="text-sm text-[var(--brand)] hover:underline">
             Open My Videos
           </Link>

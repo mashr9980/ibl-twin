@@ -47,9 +47,9 @@ const WORKSPACE_NAV: NavItem[] = [
 ];
 
 const NAV_ITEM =
-  "flex w-full min-h-[44px] items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[14px] font-normal transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-40 sm:min-h-0 sm:py-2";
+  "flex w-full min-h-[44px] items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[14px] font-normal transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-40 sm:min-h-0 sm:py-2";
 const NAV_ACTIVE = "bg-[#eef6fc] text-[#38A1E5] dark:bg-[rgb(15_45_72_/_0.92)] dark:text-[#5ec4ff]";
-const GROUP_LABEL = "px-1 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+const GROUP_LABEL = "px-1 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]";
 const CHIP =
   "min-h-[40px] shrink-0 snap-start whitespace-nowrap rounded-[8px] px-3 py-2 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
 
@@ -96,7 +96,7 @@ export function ProfileSettingsDialog({
               title={ok ? undefined : "Workspace admins only"}
               aria-current={section === item.key ? "page" : undefined}
               onClick={() => setSection(item.key)}
-              className={cn(NAV_ITEM, section === item.key ? NAV_ACTIVE : "text-foreground")}
+              className={cn(NAV_ITEM, section === item.key ? NAV_ACTIVE : "text-[var(--foreground)]")}
             >
               <Icon className="size-4 shrink-0" strokeWidth={1.5} aria-hidden />
               <span className="truncate">{item.label}</span>
@@ -126,12 +126,12 @@ export function ProfileSettingsDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0" />
 
-      <div className="relative flex h-[min(88dvh,720px)] w-[min(calc(100vw-2rem),1040px)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-md">
+      <div className="relative flex h-[min(88dvh,720px)] w-[min(calc(100vw-2rem),1040px)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] shadow-md">
         <h2 id="settings-title" className="sr-only">Profile Settings</h2>
         <p className="sr-only">Manage your account and workspace settings</p>
 
         <div className="flex h-full min-h-0 flex-1 flex-col sm:flex-row">
-          <aside className="hidden min-h-0 flex-col overflow-y-auto border-border bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] sm:flex sm:h-full sm:w-[240px] sm:shrink-0 sm:border-r sm:px-4 sm:py-5 lg:w-[260px]">
+          <aside className="hidden min-h-0 flex-col overflow-y-auto border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] sm:flex sm:h-full sm:w-[240px] sm:shrink-0 sm:border-r sm:px-4 sm:py-5 lg:w-[260px]">
             <div className="space-y-5">
               <div className="space-y-1">
                 <p className={GROUP_LABEL}>Profile settings</p>
@@ -145,21 +145,21 @@ export function ProfileSettingsDialog({
           </aside>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4">
-              <h2 className="min-w-0 flex-1 text-base font-semibold tracking-tight text-sidebar-foreground dark:text-foreground sm:text-lg md:text-xl">
+            <header className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4">
+              <h2 className="min-w-0 flex-1 text-base font-semibold tracking-tight text-[var(--sidebar-foreground)] dark:text-[var(--foreground)] sm:text-lg md:text-xl">
                 {title}
               </h2>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Close settings"
-                className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] sm:size-8"
               >
                 <X className="size-4" strokeWidth={1.75} aria-hidden />
               </button>
             </header>
 
-            <nav className="shrink-0 border-b border-border bg-muted/40 sm:hidden" aria-label="Settings sections">
+            <nav className="shrink-0 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] sm:hidden" aria-label="Settings sections">
               <div className="flex gap-1 overflow-x-auto overscroll-x-contain px-4 py-2 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {all.map((item) => (
                   <button
@@ -171,8 +171,8 @@ export function ProfileSettingsDialog({
                     className={cn(
                       CHIP,
                       section === item.key
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                        ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm"
+                        : "text-[var(--muted-foreground)] hover:bg-[color-mix(in_oklab,var(--muted)_60%,transparent)] hover:text-[var(--foreground)]",
                     )}
                   >
                     {item.label}
