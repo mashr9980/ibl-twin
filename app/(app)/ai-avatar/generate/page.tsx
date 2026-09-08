@@ -22,6 +22,7 @@ import {
   uploadHeygenAsset,
   HeygenCredentialMissingError,
   HeygenCreditsExhaustedError,
+  HeygenFreeLimitError,
   type HeygenAvatar,
 } from "@/lib/heygen/rest";
 import { getLocalTwin, setLocalTwin } from "@/lib/twin/local-library";
@@ -252,6 +253,7 @@ function CreateTwinInner() {
       setBusySource(null);
       setStage("");
       if (err instanceof HeygenCredentialMissingError) setError("HeyGen integration required.");
+      else if (err instanceof HeygenFreeLimitError) setError("You've used your free videos for this month. Upgrade for unlimited videos.");
       else if (err instanceof HeygenCreditsExhaustedError) setError("HeyGen credits are used up, so nothing can be generated right now. The workspace owner can add credits in HeyGen.");
       else if (err instanceof Error && /413|too large/i.test(err.message)) setError("File too large. Please use a smaller file.");
       else setError(`Upload failed${err instanceof Error && err.message ? ` (${err.message.slice(0, 80)})` : ""}.`);

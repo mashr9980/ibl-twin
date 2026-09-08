@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import config from "@/lib/iblai/config";
+import { freeVideosPerMonth } from "@/lib/entitlement";
 import {
   PaywallUpstreamError,
   paywallSlug,
@@ -18,6 +19,7 @@ export async function GET() {
         app: paywallSlug(),
         appName: config.appName(),
         serverReady: !platformCredentialProblem(),
+        freeVideos: freeVideosPerMonth(),
         ...catalogue,
       },
       { headers: { "Cache-Control": "no-store" } },

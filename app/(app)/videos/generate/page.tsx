@@ -13,6 +13,7 @@ import {
   uploadHeygenAsset,
   HeygenCredentialMissingError,
   HeygenCreditsExhaustedError,
+  HeygenFreeLimitError,
 } from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
@@ -110,7 +111,9 @@ export default function CreateVideoClipPage() {
       setError(
         err instanceof HeygenCredentialMissingError
           ? "HeyGen integration required."
-          : err instanceof HeygenCreditsExhaustedError
+          : err instanceof HeygenFreeLimitError
+            ? "You've used your free videos for this month. Upgrade for unlimited videos."
+            : err instanceof HeygenCreditsExhaustedError
             ? "HeyGen credits are used up, so nothing can be generated right now. The workspace owner can add credits in HeyGen."
             : "Video generation failed. Please try again.",
       );

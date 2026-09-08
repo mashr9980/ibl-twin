@@ -209,13 +209,14 @@ export function PaymentsSettings({ tenantKey }: { tenantKey: string }) {
         </p>
       </div>
 
-      {catalogue?.source === "free" && (
+      {catalogue?.free && (
         <Alert className="mb-4">
-          Free access is on: the platform&apos;s self-join switch is open, so anyone who signs in joins
-          this workspace and nothing is sold. Close self-join on the platform to sell the plan below.
+          Free plan is on: anyone who signs in joins and gets {catalogue.freeVideos} free video
+          {catalogue.freeVideos === 1 ? "" : "s"} a month. The plan below is the upgrade to unlimited
+          videos (FREE_VIDEOS_PER_MONTH sets the allowance).
         </Alert>
       )}
-      {catalogue && !catalogue.paywall && catalogue.source !== "free" && (
+      {catalogue && !catalogue.paywall && (
         <Alert className="mb-4">
           No plan is published yet, so nobody outside the workspace can join. Pick a price and
           publish it.

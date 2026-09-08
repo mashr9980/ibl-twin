@@ -47,11 +47,13 @@ const stubFetch = ({
   member = true,
   apps = {} as Record<string, unknown>,
   selfJoin = false,
+  admin = false,
   stripe = (_url: string, _init?: RequestInit) => Response.json({}),
 }: {
   member?: boolean;
   apps?: Record<string, unknown>;
   selfJoin?: boolean;
+  admin?: boolean;
   stripe?: (url: string, init?: RequestInit) => Response;
 } = {}) => {
   dm = [];
@@ -81,6 +83,8 @@ const stubFetch = ({
       }
       if (url === LINK_URL) return new Response(null, { status: 201 });
       if (url === CONFIG_URL) return Response.json({ platform_key: "testorg" });
+      if (url.includes("/api/core/platform/users/"))
+        return Response.json({ results: [{ username: "jane", is_admin: admin }] });
       if (url === PUBLIC_CONFIG_URL)
         return Response.json({ platform_key: "testorg", allow_self_linking: selfJoin });
       return stripe(url, init);
@@ -156,10 +160,12 @@ describe("GET /api/paywall/prices", () => {
     });
   });
 
-  it("reports free access while the platform's self-join switch is open, whatever is published", async () => {
+  it("flags free membership while the platform's self-join switch is open, with the plan as the upgrade", async () => {
+    process.env.FREE_VIDEOS_PER_MONTH = "3";
     stubFetch({ apps: { "ibl-twin": monthly() }, selfJoin: true });
     const { GET } = await loadPrices();
-    expect(await (await GET()).json()).toMatchObject({ paywall: false, decided: true, source: "free", prices: [] });
+    expect(await (await GET()).json()).toMatchObject({ paywall: true, decided: true, free: true, freeVideos: 3 });
+    expect((await (await GET()).json()).prices[0].id).toBe("price_1");
   });
 
   it("with no credential at all: still answers (public), but not ready", async () => {
@@ -172,6 +178,14 @@ describe("GET /api/paywall/prices", () => {
 });
 
 describe("POST /api/paywall/checkout", () => {
+  /** The Stripe side of a buyer who holds nothing yet. */
+  const nothingHeld = (url: string) => {
+    if (url.includes("/paywall/payments/")) return Response.json({ count: 0, results: [] });
+    if (url.includes("/subscriptions/?")) return Response.json({ data: [] });
+    if (url.includes("/checkout-sessions/?")) return Response.json({ data: [] });
+    return null;
+  };
+
   it("500s loudly without a platform credential", async () => {
     delete process.env.IBLAI_API_KEY;
     vi.resetModules();
@@ -182,21 +196,22 @@ describe("POST /api/paywall/checkout", () => {
     expect((await res.json()).error).toMatch(/IBLAI_API_KEY/);
   });
 
-  /** The Stripe side of a buyer who holds nothing yet. */
-  const nothingHeld = (url: string) => {
-    if (url.includes("/paywall/payments/")) return Response.json({ count: 0, results: [] });
-    if (url.includes("/subscriptions/?")) return Response.json({ data: [] });
-    if (url.includes("/checkout-sessions/?")) return Response.json({ data: [] });
-    return null;
-  };
 
-  it("free access: links the caller and answers `already`, touching neither the ledger nor Stripe", async () => {
-    stubFetch({ apps: { "ibl-twin": monthly() }, selfJoin: true, stripe: (url) => { throw new Error(`touched ${url}`); } });
+  it("free membership: a member on the free plan is sold the upgrade like anyone else", async () => {
+    stubFetch({
+      apps: { "ibl-twin": monthly() },
+      selfJoin: true,
+      stripe: (url) => {
+        const none = nothingHeld(url);
+        if (none) return none;
+        if (url.includes("/customers/search/")) return Response.json({ data: [{ id: "cus_9" }] });
+        if (url.endsWith("/checkout-sessions/")) return Response.json({ id: "cs_up", url: "https://checkout.stripe.com/c/pay/cs_up" });
+        return Response.json({});
+      },
+    });
     const { POST } = await loadCheckout();
     const res = await POST(req("/api/paywall/checkout", { method: "POST", token: "dm-jane", json: {} }));
-    expect(await res.json()).toEqual({ already: true, source: "free" });
-    const link = dm.find((c) => c.url === LINK_URL)!;
-    expect(link.body).toEqual({ user_id: 7, platform_key: "testorg", active: true });
+    expect(await res.json()).toEqual({ checkout_url: "https://checkout.stripe.com/c/pay/cs_up", session_id: "cs_up" });
   });
 
   it("404s `no_plan` while nothing is published, and refuses an unknown price", async () => {
@@ -294,6 +309,13 @@ describe("POST /api/paywall/checkout", () => {
     expect(dm.some((c) => c.url.endsWith("/checkout-sessions/") && c.method === "POST")).toBe(false);
   });
 
+  it("never sells the plan to an admin: `already`, nothing minted", async () => {
+    stubFetch({ apps: { "ibl-twin": monthly() }, admin: true, stripe: (url) => { throw new Error(`touched ${url}`); } });
+    const { POST } = await loadCheckout();
+    const res = await POST(req("/api/paywall/checkout", { method: "POST", token: "dm-jane", json: {} }));
+    expect(await res.json()).toEqual({ already: true, source: "admin" });
+  });
+
   it("requires a sign-in: the buyer is always the caller", async () => {
     stubFetch({ apps: { "ibl-twin": monthly() }, member: false });
     const { POST } = await loadCheckout();
@@ -360,13 +382,14 @@ describe("GET /api/paywall/access", () => {
     expect(dm.some((c) => c.url === LINK_URL)).toBe(false);
   });
 
-  it("answers has_access true for everyone while access is free", async () => {
+  it("never ends a membership while membership is free (a lapse only drops the plan)", async () => {
     stubFetch({ apps: { "ibl-twin": monthly() }, selfJoin: true, stripe: (url) => { throw new Error(`touched ${url}`); } });
     const { GET } = await loadAccess();
     expect(await (await GET(req("/api/paywall/access", { token: "dm-jane" }))).json()).toEqual({
       has_access: true,
-      paywall: false,
+      free: true,
     });
+    expect(dm.some((c) => c.url === LINK_URL)).toBe(false);
   });
 
   it("answers has_access true without asking the DM while nothing is for sale", async () => {

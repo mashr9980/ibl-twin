@@ -90,3 +90,9 @@ export const isInsufficientCredit = (text: string) => /insufficient_credit/i.tes
 
 /** Fired in the browser when a call just failed for lack of credits. */
 export const HEYGEN_CREDITS_EVENT = "heygen:credits";
+
+/** Fired in the browser when a generation was counted or refused: the usage banner re-asks. */
+export const HEYGEN_USAGE_EVENT = "heygen:usage";
+
+/** The app's own answer for a free-plan member past their monthly allowance. */
+export const isFreeLimit = (text: string) => /"code":\s*"free_limit"/.test(text);

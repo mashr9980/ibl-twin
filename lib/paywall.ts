@@ -290,7 +290,9 @@ async function fetchPriceDisplay(id: string): Promise<CataloguePrice> {
 export type Catalogue = {
   paywall: boolean;
   decided: boolean;
-  source: "env" | "metadata" | "none" | "free";
+  source: "env" | "metadata" | "none";
+  /** Membership is free (the platform's self-join switch is open); the plan, if any, is the upgrade. */
+  free: boolean;
   platformName: string;
   prices: CataloguePrice[];
   settings: { access: Access; amount: number | null } | null;
@@ -300,21 +302,21 @@ export async function resolveCatalogue(): Promise<Catalogue> {
   const env = envPriceIds();
   const { info, platformName } = await readAppPaymentInfo();
   const settings = info ? { access: info.access, amount: info.amount } : null;
-  if (await selfJoinOpen())
-    return { paywall: false, decided: true, source: "free", platformName, prices: [], settings };
+  const free = await selfJoinOpen();
   if (env.length) {
     const prices: CataloguePrice[] = [];
     for (const id of env) prices.push(await fetchPriceDisplay(id));
-    return { paywall: true, decided: true, source: "env", platformName, prices, settings };
+    return { paywall: true, decided: true, source: "env", free, platformName, prices, settings };
   }
   if (!info)
-    return { paywall: false, decided: false, source: "none", platformName, prices: [], settings };
+    return { paywall: false, decided: false, source: "none", free, platformName, prices: [], settings };
   if (info.access === "free" || !info.stripe.price_id)
-    return { paywall: false, decided: true, source: "metadata", platformName, prices: [], settings };
+    return { paywall: false, decided: true, source: "metadata", free, platformName, prices: [], settings };
   return {
     paywall: true,
     decided: true,
     source: "metadata",
+    free,
     platformName,
     prices: [
       {

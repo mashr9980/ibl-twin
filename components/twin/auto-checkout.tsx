@@ -96,7 +96,7 @@ export function AutoCheckout({ canceled }: { canceled: boolean }) {
   if (state.kind === "closed") {
     return (
       <div className="flex flex-col items-center gap-4 text-center">
-        <p className={CAPTION}>Joining isn&apos;t open yet. Check back soon.</p>
+        <p className={CAPTION}>No upgrade is available yet. Check back soon.</p>
         {admin && (
           <Link className={PRIMARY_BUTTON} href="/account#payments">
             Publish a plan

@@ -19,7 +19,11 @@ export type CatalogueView = {
   serverReady: boolean;
   paywall: boolean;
   decided: boolean;
-  source: "env" | "metadata" | "none" | "free";
+  source: "env" | "metadata" | "none";
+  /** Membership is free; the plan is the upgrade for unlimited videos. */
+  free: boolean;
+  /** Free videos per month on the free plan. */
+  freeVideos: number;
   platformName: string;
   prices: CataloguePriceView[];
   settings: { access: Access; amount: number | null } | null;
@@ -79,6 +83,18 @@ export async function paywallFetch<T = unknown>(
 
 export const fetchCatalogue = () => paywallFetch<CatalogueView>("/api/paywall/prices");
 
+export type AllowanceView = {
+  tier: "admin" | "plus" | "free";
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  period: string;
+  resets_at: string;
+};
+
+/** The signed-in user's tier and free-video allowance this month. */
+export const fetchUsage = () => paywallFetch<AllowanceView>("/api/paywall/usage");
+
 export const fetchAdminPrices = () =>
   paywallFetch<{ prices: AdminPriceView[] }>("/api/paywall/admin/prices").then((r) => r.prices ?? []);
 
@@ -106,8 +122,8 @@ export const markSetupDone = () => session()?.setItem(SETUP_OK_KEY, String(Date.
 
 export async function checkPaywallSetup(): Promise<"decided" | "undecided" | "unknown"> {
   try {
-    const { paywall, source } = await fetchCatalogue();
-    if (!paywall && source !== "free") return "undecided";
+    const { paywall } = await fetchCatalogue();
+    if (!paywall) return "undecided";
     markSetupDone();
     return "decided";
   } catch (e) {

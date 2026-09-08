@@ -13,7 +13,7 @@ ship, the interface stays unified and functional rather than pixel-copied.
 | Area | Status |
 |---|---|
 | ibl.ai SSO (`login.iblai.app`), tenant resolution, cross-SPA session | ✓ |
-| **Access & payments**: Auth SPA sign-in/sign-up → paywall → Stripe subscription on the tenant's own Stripe → member; admin form on `/account` | ✓ end to end in Chromium: publish → sign in → pay (test card) → member → app |
+| **Access & payments**: free plan (3 videos/month) for everyone who signs in, upgrade to unlimited on the tenant's own Stripe; admin form on `/account` | ✓ end to end in Chromium: sign up → free banner → allowance exhausted → 402 → upgrade (test card) → unlimited |
 | Sidebar shell, profile menu, footer, page titles, dark-mode-safe tokens | ✓ |
 | AI Avatar gallery (grouped by character, paginated), voices, generate modal | ✓ |
 | HeyGen video generation end to end (avatar, clip, photo-avatar upload + train) | ✓ real render produced |
@@ -24,9 +24,24 @@ ship, the interface stays unified and functional rather than pixel-copied.
 
 ## Access & payments
 
-Membership of the tenant is the entitlement, and **paying is the only way to
-get it**: self-join on the platform stays closed, there is no free option and
-nobody is invited by the app. The workspace owner publishes one plan on
+**Current model (the CEO's "first users enjoy for free and later pay if they
+want more"):** membership is free — the platform's self-join switch is open,
+so anyone who signs in joins — and every member gets `FREE_VIDEOS_PER_MONTH`
+(default 3) video generations a month. A member who wants more subscribes to
+the plan below on the tenant's own Stripe and is unlimited; admins are
+unlimited. The app's HeyGen proxy counts generations per user per UTC month
+(`lib/usage-store.ts`, a JSON file at `USAGE_STORE_FILE`, default
+`.data/usage.json`), refuses a free member past the allowance with 402
+`free_limit` before anything reaches HeyGen, and counts a generation only once
+HeyGen accepted it. A banner in the app shows "n of 3 free videos used" with
+an Upgrade link; once used up it says so and offers the upgrade. Tiers come
+from the platform: `admin` (member list), `plus` (a live subscription in the
+payment ledger), else `free`. `GET /api/paywall/usage` reports the caller's
+allowance.
+
+With the self-join switch closed, the older model applies unchanged:
+membership of the tenant is the entitlement, and **paying is the only way to
+get it**; nobody is invited by the app. The workspace owner publishes one plan on
 **Account → Access & payments** (admins only), either by picking a price that
 already exists in the workspace's Stripe account (listed live; USD, one-off or
 billed monthly) or by creating a one-time or monthly fee there. Publish tags the
@@ -148,7 +163,7 @@ respectively; vibe ships CI workflows for both.
 
 ```bash
 pnpm typecheck
-pnpm vitest run                                  # 87 unit tests (config, HeyGen, RBAC, paywall lib + routes, tenant, auth hand-off)
+pnpm vitest run                                  # 105 unit tests (config, HeyGen, RBAC, paywall lib + routes, tenant, auth hand-off)
 PW_ENV=.env.live PW_STORAGE=playwright/.auth/user-live.json pnpm exec playwright test -c e2e/playwright.config.ts
 ```
 

@@ -5,7 +5,12 @@
  * resolves the tenant's HeyGen key server-side. The browser only ever
  * presents its ibl.ai DM token, never a provider key.
  */
-import { HEYGEN_CREDITS_EVENT, isInsufficientCredit } from "@/lib/heygen/credential";
+import {
+  HEYGEN_CREDITS_EVENT,
+  HEYGEN_USAGE_EVENT,
+  isFreeLimit,
+  isInsufficientCredit,
+} from "@/lib/heygen/credential";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 
 const API_BASE = "/api/heygen";
@@ -26,14 +31,35 @@ export class HeygenCreditsExhaustedError extends Error {
   }
 }
 
+/** A free-plan member has used this month's free videos; the upgrade is the answer. */
+export class HeygenFreeLimitError extends Error {
+  constructor(public limit: number) {
+    super("heygen_free_limit");
+    this.name = "HeygenFreeLimitError";
+  }
+}
+
 async function failure(path: string, res: Response): Promise<Error> {
   const text = await res.text().catch(() => "");
   if (isInsufficientCredit(text)) {
     window.dispatchEvent(new Event(HEYGEN_CREDITS_EVENT));
     return new HeygenCreditsExhaustedError();
   }
+  if (res.status === 402 && isFreeLimit(text)) {
+    window.dispatchEvent(new Event(HEYGEN_USAGE_EVENT));
+    let limit = 0;
+    try {
+      limit = Number(JSON.parse(text).limit ?? 0);
+    } catch {
+      /* the banner re-asks anyway */
+    }
+    return new HeygenFreeLimitError(limit);
+  }
   return new Error(`heygen ${path}: ${res.status} ${text.slice(0, 200)}`);
 }
+
+/** Paths whose success counts against the free plan; the banner is told at once. */
+const GENERATIONS = new Set(["/v2/video/generate", "/v3/videos", "/v2/photo_avatar/train"]);
 
 function authHeaders(): Record<string, string> {
   const token = typeof window === "undefined" ? "" : localStorage.getItem("dm_token") ?? "";
@@ -64,6 +90,8 @@ async function request<T>(
   const res = await fetch(url.toString(), { method: init.method ?? "GET", headers, body });
   if (res.status === 424) throw new HeygenCredentialMissingError();
   if (!res.ok) throw await failure(path, res);
+  if ((init.method ?? "GET") === "POST" && GENERATIONS.has(path))
+    window.dispatchEvent(new Event(HEYGEN_USAGE_EVENT));
   return (await res.json()) as T;
 }
 

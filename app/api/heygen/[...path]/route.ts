@@ -16,6 +16,9 @@ import { NextRequest, NextResponse } from "next/server";
 import config from "@/lib/iblai/config";
 import { extractApiKey, isUsableKey } from "@/lib/heygen/credential";
 import { isAvatarCatalogue, trimAvatarCatalogue } from "@/lib/heygen/catalogue";
+import { allowanceFor } from "@/lib/entitlement";
+import { resolveUser } from "@/lib/paywall";
+import { incrementUsage } from "@/lib/usage-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +34,14 @@ const credentialCache = new Map<string, { apiKey: string; expiresAt: number }>()
 
 function upstreamBaseFor(path: string[]): string {
   return path[0] === "v1" && path[1] === "asset" ? HEYGEN_UPLOAD_BASE : HEYGEN_API_BASE;
+}
+
+/** The calls that produce a video (or train a twin): each counts as one against the free allowance. */
+export function isGeneration(method: string, relPath: string): boolean {
+  if (method !== "POST") return false;
+  return (
+    relPath === "v2/video/generate" || relPath === "v3/videos" || relPath === "v2/photo_avatar/train"
+  );
 }
 
 /**
@@ -108,6 +119,32 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const method = req.method.toUpperCase();
   const body = method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
 
+  // The free plan: a member who is neither paying nor an admin gets a monthly
+  // allowance; past it the call is refused before it reaches HeyGen, and the
+  // browser offers the upgrade. Identity comes from the platform, never the client.
+  const generation = isGeneration(method, path.join("/"));
+  let meter: { username: string } | null = null;
+  if (generation) {
+    const user = await resolveUser(dmToken);
+    if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    const allowance = await allowanceFor(user);
+    if (allowance.tier === "free") {
+      if ((allowance.remaining ?? 0) <= 0) {
+        return NextResponse.json(
+          {
+            error: "free_limit_reached",
+            code: "free_limit",
+            used: allowance.used,
+            limit: allowance.limit,
+            resets_at: allowance.resets_at,
+          },
+          { status: 402 },
+        );
+      }
+      meter = { username: user.username };
+    }
+  }
+
   if (isAvatarCatalogue(method, path.join("/")) && req.nextUrl.searchParams.get("include") !== "talking_photos") {
     const memo = catalogueMemo.get(apiKey);
     if (memo && memo.expiresAt > Date.now()) {
@@ -133,6 +170,9 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     if (!includeTalkingPhotos) catalogueMemo.set(apiKey, { body: slim, expiresAt: Date.now() + CATALOGUE_TTL_MS });
     return NextResponse.json(slim, { headers: { "Cache-Control": "private, max-age=300" } });
   }
+
+  // A generation counts only once HeyGen accepted it.
+  if (meter && upstream.ok) await incrementUsage(meter.username);
 
   return new NextResponse(upstream.body, {
     status: upstream.status,
