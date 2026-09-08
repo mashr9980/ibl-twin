@@ -23,11 +23,11 @@ import {
   HeygenCredentialMissingError,
   HeygenCreditsExhaustedError,
   HeygenFreeLimitError,
-  type HeygenAvatar,
-} from "@/lib/heygen/rest";
+  type HeygenAvatar, getPhotoAvatarLook } from "@/lib/heygen/rest";
 import { getLocalTwin, setLocalTwin } from "@/lib/twin/local-library";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
+import { TwinCard } from "@/components/twin/twin-card";
 import { cn } from "@/lib/utils";
 
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -244,8 +244,15 @@ function CreateTwinInner() {
       const group = await createPhotoAvatarGroup({ name, image_key: asset.image_key });
       setStage("Training…");
       await finalizeAndTrain(group.group_id);
+      const look = await getPhotoAvatarLook(group.group_id).catch(() => null);
       setProgress(100);
-      setLocalTwin(tenant, { groupId: group.group_id, name, imageUrl: imageUrl ?? asset.url, createdAt: Date.now() });
+      setLocalTwin(tenant, {
+        groupId: group.group_id,
+        lookId: look?.id ?? group.group_id,
+        name,
+        imageUrl: imageUrl ?? asset.url,
+        createdAt: Date.now(),
+      });
       setExisting(getLocalTwin(tenant));
       router.push("/videos/my?type=twin");
     } catch (err) {
@@ -320,10 +327,15 @@ function CreateTwinInner() {
       ) : (
         <>
           {existing && (
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#38A1E5]/50 bg-[#eef6fc] px-4 py-3 text-sm text-[#38A1E5] dark:border-[#5ec4ff]/40 dark:bg-[rgb(15_45_72_/_0.92)] dark:text-[#5ec4ff]">
-              <span>Your twin <strong>{existing.name}</strong> is ready. Use it from <Link href="/videos/my?type=twin" className="text-[var(--brand)] hover:underline">My Videos</Link>.</span>
-              <button type="button" onClick={() => { setLocalTwin(tenant, null); setExisting(null); }} className="ml-4 text-current/70 transition-colors hover:text-current">Delete twin</button>
-            </div>
+            <TwinCard
+              twin={existing}
+              showLibraryLink
+              onDelete={() => {
+                if (!confirm("Delete your twin? Videos already made with it stay.")) return;
+                setLocalTwin(tenant, null);
+                setExisting(null);
+              }}
+            />
           )}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

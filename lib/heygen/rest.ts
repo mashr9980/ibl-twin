@@ -291,6 +291,14 @@ export async function trainPhotoAvatarGroup(groupId: string): Promise<void> {
   await request("/v2/photo_avatar/train", { method: "POST", body: { group_id: groupId } });
 }
 
+/** HeyGen's training state for a twin: "pending", "ready" or "failed" (anything else reads as pending). */
+export async function getTwinTrainingStatus(groupId: string): Promise<string> {
+  const data = unwrap<{ status?: string }>(
+    await request(`/v2/photo_avatar/train/status/${encodeURIComponent(groupId)}`),
+  );
+  return String(data?.status ?? "pending");
+}
+
 /** Wait for the uploaded photo to finish processing, then kick off training. */
 export async function finalizeAndTrain(
   groupId: string,
@@ -318,6 +326,8 @@ const DIMENSIONS: Record<Orientation, { width: number; height: number }> = {
 
 export interface CreateVideoInput {
   avatar_id: string;
+  /** Set for the user's twin: the look is addressed as a talking photo, not a studio avatar. */
+  talking_photo?: boolean;
   voice_id: string;
   script: string;
   title: string;
@@ -335,7 +345,9 @@ export async function createVideo(input: CreateVideoInput): Promise<{ video_id: 
         dimension: DIMENSIONS[input.orientation],
         video_inputs: [
           {
-            character: { type: "avatar", avatar_id: input.avatar_id, avatar_style: "normal" },
+            character: input.talking_photo
+              ? { type: "talking_photo", talking_photo_id: input.avatar_id }
+              : { type: "avatar", avatar_id: input.avatar_id, avatar_style: "normal" },
             voice: {
               type: "text",
               voice_id: input.voice_id,

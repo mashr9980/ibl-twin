@@ -23,6 +23,8 @@ export interface LocalVideo {
 
 export interface LocalTwin {
   groupId: string;
+  /** The look inside the group; what a video is generated from. Older records fall back to groupId. */
+  lookId?: string;
   name: string;
   imageUrl?: string;
   createdAt: number;

@@ -13,7 +13,8 @@ import { ShareDialog } from "@/components/twin/share-dialog";
 import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
 import { deleteVideo, getVideo, listVideos, type HeygenVideo } from "@/lib/heygen/rest";
-import { forgetVideo, listLocalVideos, type VideoKind } from "@/lib/twin/local-library";
+import { forgetVideo, getLocalTwin, listLocalVideos, setLocalTwin, type LocalTwin, type VideoKind } from "@/lib/twin/local-library";
+import { TwinCard } from "@/components/twin/twin-card";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 import { Alert } from "@/components/twin/alert";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,7 @@ function MyVideosInner() {
   const params = useSearchParams();
   const credential = useHeygenCredential();
   const tenant = resolveAppTenant();
+  const [twin, setTwin] = useState<LocalTwin | null>(() => (typeof window === "undefined" ? null : getLocalTwin(tenant)));
   const chip = (params.get("type") as Chip | null) ?? "all";
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -120,7 +122,11 @@ function MyVideosInner() {
   }
 
   const empty =
-    chip === "twin" ? "No twin. Use Create Twin to make your twin videos." : "No videos in this category yet.";
+    chip === "twin"
+      ? twin
+        ? "No twin videos yet. Create one with your twin above."
+        : "No twin yet. Use Create Twin to make your twin, then your twin videos appear here."
+      : "No videos in this category yet.";
 
   return (
     <div className="flex min-h-full w-full min-w-0 max-w-full flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
@@ -172,6 +178,18 @@ function MyVideosInner() {
           </div>
 
           {error && <Alert className="mb-4" onDismiss={() => setError(null)}>{error}</Alert>}
+
+          {chip === "twin" && twin && (
+            <TwinCard
+              twin={twin}
+              onGenerated={() => void load()}
+              onDelete={() => {
+                if (!confirm("Delete your twin? Videos already made with it stay.")) return;
+                setLocalTwin(tenant, null);
+                setTwin(null);
+              }}
+            />
+          )}
 
           <div className="space-y-4 pb-4 [overflow-anchor:none]">
           <section>

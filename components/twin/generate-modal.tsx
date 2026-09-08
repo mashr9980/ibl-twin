@@ -45,7 +45,19 @@ export function deriveTitle(avatarName: string, script: string, voiceName: strin
   return raw.length > 72 ? `${raw.slice(0, 71)}…` : raw;
 }
 
-export function GenerateModal({ avatar, onClose }: { avatar: HeygenAvatar; onClose: () => void }) {
+export function GenerateModal({
+  avatar,
+  onClose,
+  onGenerated,
+  kind = "avatar",
+}: {
+  avatar: HeygenAvatar;
+  onClose: () => void;
+  /** Called once HeyGen accepted the video, before the library opens. */
+  onGenerated?: () => void;
+  /** "twin": the avatar is the user's own photo avatar; the video is filed under Twin. */
+  kind?: "avatar" | "twin";
+}) {
   const router = useRouter();
   const [voices, setVoices] = useState<HeygenVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
@@ -104,6 +116,7 @@ export function GenerateModal({ avatar, onClose }: { avatar: HeygenAvatar; onClo
     try {
       const { video_id } = await createVideo({
         avatar_id: avatar.avatar_id,
+        talking_photo: kind === "twin",
         voice_id: voiceId,
         script: script.trim(),
         title,
@@ -113,12 +126,13 @@ export function GenerateModal({ avatar, onClose }: { avatar: HeygenAvatar; onClo
       rememberVideo(resolveAppTenant(), {
         id: video_id,
         title,
-        kind: "avatar",
+        kind,
         orientation: chosen,
         avatarName: avatar.avatar_name,
         createdAt: Date.now(),
       });
-      router.push("/videos/my?type=avatar");
+      onGenerated?.();
+      router.push(`/videos/my?type=${kind}`);
     } catch (err) {
       setError(
         err instanceof HeygenFreeLimitError
@@ -163,7 +177,7 @@ export function GenerateModal({ avatar, onClose }: { avatar: HeygenAvatar; onClo
       <div className="relative flex max-h-[min(92dvh,calc(100dvh-2rem))] w-[min(calc(100vw-2rem),1040px)] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] p-0 text-[var(--card-foreground)] shadow-md">
         <div className="shrink-0 space-y-0 border-b border-[var(--border)] px-4 py-4 text-left sm:px-6">
           <h2 id="gen-title" className="text-base font-semibold text-[var(--content-title)] sm:text-lg">
-            Edit Avatar Video
+            {kind === "twin" ? "Create video with my twin" : "Edit Avatar Video"}
           </h2>
         </div>
 
