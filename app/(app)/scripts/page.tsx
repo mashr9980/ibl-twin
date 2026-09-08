@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, Play, Search, Square, Waves } from "lucide-react";
 
+import { Alert } from "@/components/twin/alert";
 import { HeygenGate } from "@/components/twin/avatar-gallery";
+import { CloneVoiceDialog } from "@/components/twin/clone-voice-dialog";
 import { cn } from "@/lib/utils";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
-import { listHeygenVoices, type HeygenVoice } from "@/lib/heygen/rest";
+import { listHeygenVoices, listPrivateVoices, type HeygenPrivateVoice, type HeygenVoice } from "@/lib/heygen/rest";
 
 /** 3,169 voices is ~22k DOM nodes. Same page-at-a-time rule as the gallery. */
 const PAGE = 60;
@@ -19,11 +21,24 @@ export default function VoicesPage() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [shown, setShown] = useState(PAGE);
   const audio = useRef<HTMLAudioElement | null>(null);
+  const [mine, setMine] = useState<HeygenPrivateVoice[] | null>(null);
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadMine = useCallback(() => {
+    listPrivateVoices()
+      .then(setMine)
+      .catch(() => {
+        setMine([]);
+        setError("Couldn't load your cloned voices. Please try again.");
+      });
+  }, []);
 
   useEffect(() => {
     if (credential !== "ok") { if (credential === "missing") setLoading(false); return; }
     listHeygenVoices().then(setVoices).finally(() => setLoading(false));
-  }, [credential]);
+    loadMine();
+  }, [credential, loadMine]);
 
   const matching = useMemo(
     () => voices.filter((v) => !q || (v.name ?? "").toLowerCase().includes(q.toLowerCase())),
@@ -87,8 +102,7 @@ export default function VoicesPage() {
           </div>
           <button
             type="button"
-            disabled
-            title="Voice cloning isn't available in this build"
+            onClick={() => setCloneOpen(true)}
             className="inline-flex h-8 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border-0 bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] px-3 py-2 text-xs font-medium text-white shadow-none transition-all hover:brightness-[0.96] disabled:pointer-events-none disabled:opacity-50 sm:h-9 sm:w-auto sm:px-4 sm:text-[13px]"
           >
             <Waves className="size-4" strokeWidth={1.75} aria-hidden />
@@ -103,21 +117,54 @@ export default function VoicesPage() {
         <>
           <section className="mb-10">
             <h2 className="mb-4 text-sm font-semibold text-[var(--content-title)] sm:text-base">My Voices</h2>
-            <div className="flex min-h-[180px] flex-col items-center justify-center rounded-[9px] border border-dashed border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] dark:bg-[color-mix(in_oklab,var(--muted)_25%,transparent)] px-4 py-10 sm:min-h-[200px] sm:px-6 sm:py-12">
-              <Waves size={32} strokeWidth={1.25} className="mb-3 text-[var(--muted-foreground)]" />
-              <p className="mb-5 max-w-md text-center text-[10px] leading-snug text-[var(--content-caption)] sm:text-[11px]">
-                No voices yet — clone one or add from pre-built below
-              </p>
-              <button
-                type="button"
-                disabled
-                title="Voice cloning isn't available in this build"
-                className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-xs font-normal text-[var(--content-title)] shadow-sm transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-50 sm:text-[13px]"
-              >
-                <Waves className="size-4" strokeWidth={1.75} aria-hidden />
-                Clone your voice
-              </button>
-            </div>
+            {error && <Alert tone="warning" className="mb-4" onDismiss={() => setError(null)}>{error}</Alert>}
+            {mine && mine.length > 0 ? (
+              <div className="rounded-[9px] border border-[var(--border)] bg-[var(--card)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                {mine.map((v) => (
+                  <div key={v.voice_id} className="flex flex-col gap-3 border-b border-[var(--border)] px-3 py-4 last:border-b-0 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Preview ${v.name ?? "voice"}`}
+                      onClick={() => toggle({ voice_id: v.voice_id, name: v.name, preview_audio: v.preview_audio_url })}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle({ voice_id: v.voice_id, name: v.name, preview_audio: v.preview_audio_url }); } }}
+                      className="flex min-w-0 flex-1 cursor-pointer touch-manipulation items-start gap-3"
+                    >
+                      <span className={cn("relative flex size-10 shrink-0 items-center justify-center rounded-[5px] bg-gradient-to-br text-white sm:size-12", swatch(v.voice_id))}>
+                        {playing === v.voice_id ? <Square size={14} className="fill-white" /> : <Play size={14} className="fill-white" strokeWidth={0} />}
+                      </span>
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="text-xs font-semibold text-[var(--content-title)] sm:text-[13px]">{v.name}</p>
+                        <p className="mt-0.5 text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">
+                          {v.status && v.status !== "complete" ? "Cloning…" : "Cloned voice"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-[60px] sm:pl-0">
+                      <div className="flex items-center gap-1.5 text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">
+                        <span className="text-base leading-none" aria-hidden="true">{flagOf(v.language)}</span>
+                        <span>{v.language ?? "Unknown"}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex min-h-[180px] flex-col items-center justify-center rounded-[9px] border border-dashed border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] dark:bg-[color-mix(in_oklab,var(--muted)_25%,transparent)] px-4 py-10 sm:min-h-[200px] sm:px-6 sm:py-12">
+                <Waves size={32} strokeWidth={1.25} className="mb-3 text-[var(--muted-foreground)]" />
+                <p className="mb-5 max-w-md text-center text-[10px] leading-snug text-[var(--content-caption)] sm:text-[11px]">
+                  No voices yet — clone one or add from pre-built below
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCloneOpen(true)}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-xs font-normal text-[var(--content-title)] shadow-sm transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-50 sm:text-[13px]"
+                >
+                  <Waves className="size-4" strokeWidth={1.75} aria-hidden />
+                  Clone your voice
+                </button>
+              </div>
+            )}
           </section>
 
           <section>
@@ -194,6 +241,8 @@ export default function VoicesPage() {
           </section>
         </>
       )}
+
+      <CloneVoiceDialog open={cloneOpen} onClose={() => setCloneOpen(false)} onCloned={loadMine} />
     </div>
   );
 }

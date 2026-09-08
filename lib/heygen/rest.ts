@@ -296,6 +296,46 @@ export async function listHeygenVoices(): Promise<HeygenVoice[]> {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Voice cloning (HeyGen Instant Clone, /v3/voices)
+
+export interface HeygenPrivateVoice {
+  voice_id: string;
+  name?: string | null;
+  language?: string | null;
+  gender?: string | null;
+  preview_audio_url?: string | null;
+  status?: string | null;
+  type?: string | null;
+}
+
+/** The voices this account cloned; a fresh clone appears here once it is complete. */
+export async function listPrivateVoices(): Promise<HeygenPrivateVoice[]> {
+  const body = await request<{ data?: HeygenPrivateVoice[] }>("/v3/voices", {
+    query: { type: "private", limit: 100 },
+  });
+  return Array.isArray(body?.data) ? body.data : [];
+}
+
+/** Start an instant clone from an uploaded recording. Cloning runs asynchronously. */
+export async function cloneVoice(input: { name: string; assetId: string }): Promise<{ voice_clone_id: string }> {
+  return unwrap(
+    await request<{ data?: { voice_clone_id: string } } & Partial<{ voice_clone_id: string }>>("/v3/voices/clone", {
+      method: "POST",
+      body: { voice_name: input.name, audio: { type: "asset_id", asset_id: input.assetId } },
+    }),
+  );
+}
+
+/** "processing", "complete" or "failed". */
+export async function getVoiceClone(voiceId: string): Promise<HeygenPrivateVoice> {
+  return unwrap<HeygenPrivateVoice>(
+    await request<{ data?: HeygenPrivateVoice } & Partial<HeygenPrivateVoice>>(
+      `/v3/voices/${encodeURIComponent(voiceId)}`,
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Assets + photo twins (HeyGen "photo avatar" groups)
 //
 // Create Twin pipeline:
