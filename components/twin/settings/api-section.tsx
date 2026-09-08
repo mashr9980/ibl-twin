@@ -8,7 +8,7 @@ import { Copy } from "lucide-react";
 
 import { Alert } from "@/components/twin/alert";
 import config from "@/lib/iblai/config";
-import { FIELD, HINT, LABEL, OUTLINE_BTN, PRIMARY_BTN, SECTION_TITLE } from "./ui";
+import { FIELD, HINT, LABEL, OUTLINE_BTN, PRIMARY_BTN } from "./ui";
 
 type Token = { name: string; username: string; created: string; expires: string | null; mode?: string };
 
@@ -64,7 +64,6 @@ export function ApiSection({ tenantKey }: { tenantKey: string }) {
   return (
     <div className="w-full space-y-8">
       <div>
-        <h3 className={SECTION_TITLE}>API</h3>
         <p className={HINT}>
           Platform API tokens let servers and scripts call the ibl.ai API for this workspace. Send one as{" "}
           <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-[12px]">Authorization: Api-Token &lt;key&gt;</code>.

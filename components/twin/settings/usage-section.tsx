@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useHeygenCredits } from "@/hooks/use-heygen-credential";
 import { fetchUsage, type AllowanceView } from "@/lib/paywall-client";
 import { loadLibrary, type LocalVideo } from "@/lib/twin/local-library";
-import { HINT, LABEL, OUTLINE_BTN, SECTION_TITLE } from "./ui";
+import { HINT, LABEL, OUTLINE_BTN } from "./ui";
 
 const KIND: Record<LocalVideo["kind"], string> = { twin: "Twin", avatar: "Avatar", clip: "Video Clip" };
 
@@ -27,10 +27,7 @@ export function UsageSection({ isAdmin, onClose }: { isAdmin: boolean; onClose: 
 
   return (
     <div className="w-full space-y-8">
-      <div>
-        <h3 className={SECTION_TITLE}>Usage &amp; History</h3>
-        <p className={HINT}>What you have used this month and everything you have made.</p>
-      </div>
+      <p className={HINT}>What you have used this month and everything you have made.</p>
 
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">

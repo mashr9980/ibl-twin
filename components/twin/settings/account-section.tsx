@@ -1,7 +1,8 @@
 "use client";
 
-// Account: the member's platform profile through the SDK's data layer —
-// picture, name, email, password reset link, account deletion.
+// Account, laid out exactly as twin.memorare.ai's: picture, name, email,
+// password, 2FA, connected accounts, delete/log out. Each control runs
+// against the platform through the SDK's data layer.
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -14,7 +15,7 @@ import {
 import { Alert } from "@/components/twin/alert";
 import { handleLogout } from "@/lib/iblai/auth-utils";
 import config from "@/lib/iblai/config";
-import { FIELD, HINT, LABEL, OUTLINE_BTN, PRIMARY_BTN } from "./ui";
+import { FIELD, HINT, LABEL, OUTLINE_BTN, PRIMARY_BTN, VALUE } from "./ui";
 
 const PHOTO_MAX = 4 * 1024 * 1024;
 
@@ -30,12 +31,20 @@ const splitName = (full: string) => {
   return { first, last: rest.join(" ") };
 };
 
+const GoogleIcon = () => (
+  <svg className="mr-2 size-5" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+  </svg>
+);
+
 export function AccountSection({ username, email, tenantKey }: { username: string; email: string; tenantKey: string }) {
   const account = useGetUserMetadataEdxQuery({ params: { username } } as never, { skip: !username });
   const data = account.data as EdxAccount | undefined;
   const [updateEdx, updating] = useUpdateUserMetadataEdxMutation();
   const [uploadImage, uploading] = useUploadProfileImageMutation();
-  const [resetting, setResetting] = useState(false);
   const [selfRetire, retiring] = useSelfRetireMutation();
 
   const [first, setFirst] = useState("");
@@ -43,22 +52,23 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
   const [emailDraft, setEmailDraft] = useState("");
   const [emailOpen, setEmailOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [notice, setNotice] = useState<{ tone: "info" | "warning"; text: string } | null>(null);
   const photo = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!data?.name) return;
-    const { first: f, last: l } = splitName(data.name);
+    if (data?.name === undefined) return;
+    const { first: f, last: l } = splitName(data.name ?? "");
     setFirst(f);
     setLast(l);
   }, [data?.name]);
 
   const currentEmail = data?.email || email;
-  // The platform names the picture on the API host, which does not serve media; the LMS host does.
+  // The platform names the picture on the API host, which does not serve
+  // media; the LMS host does.
   const picture = data?.profile_image?.has_image
     ? (data.profile_image.image_url_full || data.profile_image.image_url_large || "").replace(/^https?:\/\/[^/]+/, config.legacyLmsUrl())
     : null;
-  const nameDirty = data ? `${first} ${last}`.trim() !== (data.name ?? "").trim() : false;
 
   const patch = (body: Record<string, unknown>) =>
     updateEdx({ username, body: JSON.stringify(body), method: "PATCH", contentType: "application/merge-patch+json" } as never).unwrap();
@@ -68,7 +78,7 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
     if (!file.type.startsWith("image/")) return setNotice({ tone: "warning", text: "Please choose an image file." });
     if (file.size > PHOTO_MAX) return setNotice({ tone: "warning", text: "That photo is over 4MB. Please pick a smaller one." });
     try {
-      // The platform needs a year of birth on the profile before it accepts a picture.
+      // The platform wants a year of birth on the profile before it accepts a picture.
       if (!data?.year_of_birth) await patch({ year_of_birth: 1996 });
       await uploadImage({ file, filename: file.name, username } as never).unwrap();
       await account.refetch();
@@ -78,10 +88,12 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
     }
   }
 
+  // Twin shows no save button: the name is saved when the field loses focus.
   async function saveName() {
-    setNotice(null);
+    const next = `${first} ${last}`.trim();
+    if (!data || !next || next === (data.name ?? "").trim()) return;
     try {
-      await patch({ name: `${first} ${last}`.trim() });
+      await patch({ name: next });
       setNotice({ tone: "info", text: "Name saved." });
     } catch {
       setNotice({ tone: "warning", text: "Couldn't save your name. Please try again." });
@@ -101,8 +113,8 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
     }
   }
 
-  // The SDK's own call goes to the legacy LMS host with cookies, which the
-  // browser refuses cross-origin; the same endpoint answers on the API host.
+  // The SDK's own reset call goes to the legacy LMS host with cookies, which
+  // the browser refuses cross-origin; the same endpoint answers on the API host.
   async function sendReset() {
     setNotice(null);
     setResetting(true);
@@ -143,16 +155,16 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
       <section className="space-y-3">
         <span className={LABEL}>Profile Picture</span>
         <div className="flex items-center gap-4 sm:gap-5">
-          <span className="relative flex size-20 shrink-0 overflow-hidden rounded-full border border-[var(--border)] bg-[var(--card)]">
+          <span className="relative flex size-20 shrink-0 overflow-hidden rounded-full border border-border bg-card">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={picture ?? "/images/user-profile.png"} alt={username} className="aspect-square h-full w-full object-cover" />
+            <img className="aspect-square h-full w-full object-cover" alt={username} src={picture ?? "/images/user-profile.png"} />
           </span>
           <div className="min-w-0 space-y-1.5">
             <input
               ref={photo}
-              type="file"
               accept="image/*"
               className="sr-only"
+              type="file"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) void onPhoto(f);
@@ -170,22 +182,31 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-2">
           <label className={LABEL} htmlFor="settings-first-name">First Name</label>
-          <input id="settings-first-name" className={FIELD} value={first} onChange={(e) => setFirst(e.target.value)} disabled={!data} />
+          <input
+            id="settings-first-name"
+            className={FIELD}
+            value={first}
+            onChange={(e) => setFirst(e.target.value)}
+            onBlur={saveName}
+            disabled={!data || updating.isLoading}
+          />
         </div>
         <div className="space-y-2">
           <label className={LABEL} htmlFor="settings-last-name">Last Name</label>
-          <input id="settings-last-name" className={FIELD} value={last} onChange={(e) => setLast(e.target.value)} disabled={!data} />
+          <input
+            id="settings-last-name"
+            className={FIELD}
+            value={last}
+            onChange={(e) => setLast(e.target.value)}
+            onBlur={saveName}
+            disabled={!data || updating.isLoading}
+          />
         </div>
       </div>
-      {nameDirty && (
-        <button type="button" onClick={saveName} disabled={updating.isLoading || !first.trim()} className={PRIMARY_BTN}>
-          {updating.isLoading ? "Saving…" : "Save name"}
-        </button>
-      )}
 
       <section className="space-y-3">
         <span className={LABEL}>Email</span>
-        <p className="text-sm text-[var(--muted-foreground)]">{currentEmail}</p>
+        <p className={VALUE}>{currentEmail}</p>
         {emailOpen ? (
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -212,31 +233,49 @@ export function AccountSection({ username, email, tenantKey }: { username: strin
 
       <section className="space-y-3">
         <span className={LABEL}>Password</span>
-        <p className={HINT}>We email you a link to create or change your password.</p>
         <button type="button" onClick={sendReset} disabled={resetting} className={OUTLINE_BTN}>
-          {resetting ? "Sending…" : "Send password link"}
+          {resetting ? "Sending…" : "Create password"}
         </button>
       </section>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className={LABEL}>2-factor authentication</span>
-          <span className="text-sm text-[var(--muted-foreground)]">Off</span>
+          <div className="flex items-center gap-2.5">
+            <span className={VALUE}>Off</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={false}
+              data-state="unchecked"
+              aria-label="Toggle two-factor authentication"
+              onClick={() => setNotice({ tone: "warning", text: "Two-factor sign-in isn't available on this workspace yet." })}
+              className="peer group/switch inline-flex h-[1.15rem] w-8 shrink-0 items-center rounded-full border border-transparent bg-input shadow-xs outline-none transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/80"
+            >
+              <span className="pointer-events-none block size-4 translate-x-0 rounded-full bg-background ring-0 transition-transform dark:bg-foreground" />
+            </button>
+          </div>
         </div>
-        <p className={HINT}>Two-factor sign-in is not offered on this workspace yet.</p>
+        <p className={HINT}>2FA is disabled on your account.</p>
       </section>
 
-      <div className="border-t border-[var(--border)] pt-8">
+      <div className="border-t border-border pt-8">
         <section className="space-y-3">
           <span className={LABEL}>Connected accounts</span>
-          <p className={HINT}>Google and other sign-in methods are managed on the ibl.ai sign-in page.</p>
-          <a href={config.authUrl()} target="_blank" rel="noopener noreferrer" className={OUTLINE_BTN}>
-            Manage sign-in methods
-          </a>
+          <button
+            type="button"
+            onClick={() => setNotice({ tone: "warning", text: "Sign-in methods are managed on the ibl.ai sign-in page." })}
+            className={`${OUTLINE_BTN} gap-2`}
+          >
+            <span className="inline-flex [&_svg]:mr-0">
+              <GoogleIcon />
+            </span>
+            Disconnect Google
+          </button>
         </section>
       </div>
 
-      <div className="border-t border-[var(--border)] pt-8">
+      <div className="border-t border-border pt-8">
         {confirmDelete ? (
           <div className="space-y-3 rounded-lg border border-[#f2b544]/70 bg-[#fff7e6] p-4 text-[#8a5a00]">
             <p className="text-sm">Delete your account? Your profile is scheduled for removal and you are signed out. This cannot be undone.</p>

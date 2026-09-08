@@ -12,7 +12,7 @@ import { AdvancedTab, AgentSkills, BillingTab, IntegrationsTab } from "@iblai/ib
 import { PaymentsSettings } from "@/components/twin/payments-settings";
 import config from "@/lib/iblai/config";
 import { readTenants, type TenantEntry } from "@/lib/iblai/tenant";
-import { HINT, OUTLINE_BTN, SECTION_TITLE } from "./ui";
+import { HINT, OUTLINE_BTN } from "./ui";
 
 const tenantEntry = (key: string): TenantEntry | undefined => readTenants().find((t) => t.key === key);
 
@@ -24,10 +24,7 @@ export function GeneralSection({ tenantKey }: { tenantKey: string }) {
   const [tenant, setTenant] = useState<TenantEntry | undefined>(() => tenantEntry(tenantKey));
   return (
     <div className="w-full space-y-4">
-      <div>
-        <h3 className={SECTION_TITLE}>General</h3>
-        <p className={HINT}>Workspace name, logo and support details.</p>
-      </div>
+      <p className={HINT}>Workspace name, logo and support details.</p>
       <Frame>
         <OrganizationTab
           platformKey={tenantKey}
@@ -43,10 +40,7 @@ export function GeneralSection({ tenantKey }: { tenantKey: string }) {
 export function BillingSection({ tenantKey, username, email }: { tenantKey: string; username: string; email: string }) {
   return (
     <div className="w-full space-y-8">
-      <div>
-        <h3 className={SECTION_TITLE}>Plan &amp; Billing</h3>
-        <p className={HINT}>The workspace&apos;s ibl.ai plan and credits, and the plan members pay for.</p>
-      </div>
+      <p className={HINT}>The workspace&apos;s ibl.ai plan and credits, and the plan members pay for.</p>
       <Frame>
         <BillingTab
           tenant={tenantKey}
@@ -64,10 +58,7 @@ export function BillingSection({ tenantKey, username, email }: { tenantKey: stri
 export function SecuritySection({ tenantKey, username }: { tenantKey: string; username: string }) {
   return (
     <div className="w-full space-y-4">
-      <div>
-        <h3 className={SECTION_TITLE}>Security</h3>
-        <p className={HINT}>Who can sign in, and how.</p>
-      </div>
+      <p className={HINT}>Who can sign in, and how.</p>
       <Frame>
         <AdvancedTab
           platformKey={tenantKey}
@@ -84,10 +75,7 @@ export function SecuritySection({ tenantKey, username }: { tenantKey: string; us
 export function ConnectionsSection({ tenantKey, username }: { tenantKey: string; username: string }) {
   return (
     <div className="w-full space-y-4">
-      <div>
-        <h3 className={SECTION_TITLE}>Connections</h3>
-        <p className={HINT}>Keys for the services this workspace uses: language models, data sources and APIs such as HeyGen.</p>
-      </div>
+      <p className={HINT}>Keys for the services this workspace uses: language models, data sources and APIs such as HeyGen.</p>
       <Frame>
         <IntegrationsTab tenantKey={tenantKey} username={username} />
       </Frame>
@@ -118,10 +106,7 @@ export function SkillsSection({ tenantKey, username }: { tenantKey: string; user
 
   return (
     <div className="w-full space-y-4">
-      <div>
-        <h3 className={SECTION_TITLE}>Agentic Skills</h3>
-        <p className={HINT}>Skills give an AI agent abilities: tools it can call and tasks it can run.</p>
-      </div>
+      <p className={HINT}>Skills give an AI agent abilities: tools it can call and tasks it can run.</p>
       {mentors === null ? (
         <p className={HINT}>Loading agents…</p>
       ) : mentors.length === 0 ? (

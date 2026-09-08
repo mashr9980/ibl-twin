@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Alert } from "@/components/twin/alert";
 import { useTwinPreferences, type ShowMeAs } from "@/hooks/use-twin-preferences";
 import { getTwin, setTwin, type LocalTwin } from "@/lib/twin/local-library";
-import { FIELD, HINT, LABEL, PRIMARY_BTN, SECTION_TITLE } from "./ui";
+import { FIELD, HINT, LABEL, PRIMARY_BTN } from "./ui";
 
 const SHOW_AS: { value: ShowMeAs; label: string }[] = [
   { value: "email", label: "My email" },
@@ -46,10 +46,7 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
 
   return (
     <div className="w-full space-y-8">
-      <div>
-        <h3 className={SECTION_TITLE}>Personalization</h3>
-        <p className={HINT}>Make the app yours.</p>
-      </div>
+      <p className={HINT}>Make the app yours.</p>
       {(error || notice) && (
         <Alert tone={error ? "warning" : notice!.tone} onDismiss={() => setNotice(null)}>
           {error ? "Couldn't save that setting. Please try again." : notice!.text}

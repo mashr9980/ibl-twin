@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Alert } from "@/components/twin/alert";
 import { applyTheme, useTwinPreferences, type Theme } from "@/hooks/use-twin-preferences";
 import { listHeygenVoices, type HeygenVoice } from "@/lib/heygen/rest";
-import { FIELD, HINT, LABEL, SECTION_TITLE } from "./ui";
+import { FIELD, HINT, LABEL } from "./ui";
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: "light", label: "Light" },
@@ -33,10 +33,7 @@ export function PreferencesSection({ tenantKey }: { tenantKey: string }) {
 
   return (
     <div className="w-full space-y-8">
-      <div>
-        <h3 className={SECTION_TITLE}>Preferences</h3>
-        <p className={HINT}>Saved to your account, so they follow you to any device.</p>
-      </div>
+      <p className={HINT}>Saved to your account, so they follow you to any device.</p>
       {error && <Alert tone="warning">Couldn&apos;t save that preference. Please try again.</Alert>}
 
       <section className="space-y-3">

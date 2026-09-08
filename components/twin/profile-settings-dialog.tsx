@@ -1,8 +1,10 @@
 "use client";
 
 /**
- * Twin's "Profile settings" dialog: profile settings for every member, and
- * workspace settings for admins, each section live against the platform.
+ * Twin's "Profile settings" dialog, laid out as twin.memorare.ai's: a section
+ * rail on the left (a scrolling chip row on phones), and a pane headed by the
+ * section's name. Profile settings are for every member, workspace settings
+ * for admins.
  */
 
 import { useEffect, useState } from "react";
@@ -45,9 +47,11 @@ const WORKSPACE_NAV: NavItem[] = [
 ];
 
 const NAV_ITEM =
-  "flex w-full min-h-[44px] items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[14px] font-normal transition-colors hover:bg-[var(--accent)] disabled:pointer-events-none disabled:opacity-40 sm:min-h-0 sm:py-2";
+  "flex w-full min-h-[44px] items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[14px] font-normal transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-40 sm:min-h-0 sm:py-2";
 const NAV_ACTIVE = "bg-[#eef6fc] text-[#38A1E5] dark:bg-[rgb(15_45_72_/_0.92)] dark:text-[#5ec4ff]";
-const GROUP_LABEL = "px-1 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]";
+const GROUP_LABEL = "px-1 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+const CHIP =
+  "min-h-[40px] shrink-0 snap-start whitespace-nowrap rounded-[8px] px-3 py-2 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
 
 export function ProfileSettingsDialog({
   open,
@@ -76,8 +80,10 @@ export function ProfileSettingsDialog({
   if (!open) return null;
 
   const allowed = (item: NavItem) => !item.adminOnly || isAdmin;
+  const all = [...PROFILE_NAV, ...WORKSPACE_NAV];
+  const title = all.find((i) => i.key === section)?.label ?? "Account";
 
-  const nav = (items: NavItem[]) => (
+  const railGroup = (items: NavItem[]) => (
     <ul className="flex flex-col gap-0.5">
       {items.map((item) => {
         const Icon = item.icon;
@@ -90,7 +96,7 @@ export function ProfileSettingsDialog({
               title={ok ? undefined : "Workspace admins only"}
               aria-current={section === item.key ? "page" : undefined}
               onClick={() => setSection(item.key)}
-              className={cn(NAV_ITEM, section === item.key ? NAV_ACTIVE : "text-[var(--foreground)]")}
+              className={cn(NAV_ITEM, section === item.key ? NAV_ACTIVE : "text-foreground")}
             >
               <Icon className="size-4 shrink-0" strokeWidth={1.5} aria-hidden />
               <span className="truncate">{item.label}</span>
@@ -116,51 +122,70 @@ export function ProfileSettingsDialog({
     }
   })();
 
-  const all = [...PROFILE_NAV, ...WORKSPACE_NAV];
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Profile settings">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0" />
 
-      <div className="relative flex h-[min(88dvh,720px)] w-[min(calc(100vw-2rem),1040px)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] shadow-md">
+      <div className="relative flex h-[min(88dvh,720px)] w-[min(calc(100vw-2rem),1040px)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-md">
+        <h2 id="settings-title" className="sr-only">Profile Settings</h2>
+        <p className="sr-only">Manage your account and workspace settings</p>
+
         <div className="flex h-full min-h-0 flex-1 flex-col sm:flex-row">
-          <aside className="hidden min-h-0 flex-col overflow-y-auto border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] sm:flex sm:h-full sm:w-[240px] sm:shrink-0 sm:border-r sm:px-4 sm:py-5 lg:w-[260px]">
+          <aside className="hidden min-h-0 flex-col overflow-y-auto border-border bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] sm:flex sm:h-full sm:w-[240px] sm:shrink-0 sm:border-r sm:px-4 sm:py-5 lg:w-[260px]">
             <div className="space-y-5">
               <div className="space-y-1">
                 <p className={GROUP_LABEL}>Profile settings</p>
-                {nav(PROFILE_NAV)}
+                {railGroup(PROFILE_NAV)}
               </div>
               <div className="space-y-1">
                 <p className={GROUP_LABEL}>Workspace settings</p>
-                {nav(WORKSPACE_NAV)}
+                {railGroup(WORKSPACE_NAV)}
               </div>
             </div>
           </aside>
 
-          {/* Phones: the sections as a select above the content. */}
-          <div className="border-b border-[var(--border)] px-4 pt-4 sm:hidden">
-            <label htmlFor="settings-section" className="sr-only">Section</label>
-            <select
-              id="settings-section"
-              value={section}
-              onChange={(e) => setSection(e.target.value as Section)}
-              className="mb-3 h-10 w-full rounded-[8px] border border-[var(--input)] bg-[var(--background)] px-3 text-sm"
-            >
-              {all.filter(allowed).map((i) => (
-                <option key={i.key} value={i.key}>{i.label}</option>
-              ))}
-            </select>
-          </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3.5 sm:gap-4 sm:px-6 sm:py-4">
+              <h2 className="min-w-0 flex-1 text-base font-semibold tracking-tight text-sidebar-foreground dark:text-foreground sm:text-lg md:text-xl">
+                {title}
+              </h2>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close settings"
+                className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-8"
+              >
+                <X className="size-4" strokeWidth={1.75} aria-hidden />
+              </button>
+            </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-7">
-            {body}
+            <nav className="shrink-0 border-b border-border bg-muted/40 sm:hidden" aria-label="Settings sections">
+              <div className="flex gap-1 overflow-x-auto overscroll-x-contain px-4 py-2 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {all.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    disabled={!allowed(item)}
+                    aria-current={section === item.key ? "page" : undefined}
+                    onClick={() => setSection(item.key)}
+                    className={cn(
+                      CHIP,
+                      section === item.key
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </nav>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-7">
+              {body}
+            </div>
           </div>
         </div>
-
-        <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-xs opacity-70 transition-opacity hover:opacity-100">
-          <X className="size-4" strokeWidth={2} aria-hidden />
-          <span className="sr-only">Close</span>
-        </button>
       </div>
     </div>
   );
