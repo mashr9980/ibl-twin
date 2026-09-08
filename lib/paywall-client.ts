@@ -127,7 +127,8 @@ export async function checkPaywallSetup(): Promise<"decided" | "undecided" | "un
     markSetupDone();
     return "decided";
   } catch (e) {
-    console.error("[paywall] setup check failed:", e);
+    // A navigation can abort this fetch; that is not worth an error in the console.
+    console.warn("[paywall] setup check skipped:", e instanceof Error ? e.message : e);
     return "unknown";
   }
 }

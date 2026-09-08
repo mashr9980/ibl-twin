@@ -309,8 +309,10 @@ function CreateTwinInner() {
     setProgress(1);
     setStage("Fetching your picture");
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error();
+      // Most image hosts refuse cross-origin reads; the browser's own error is
+      // never shown, only ours.
+      const res = await fetch(url).catch(() => null);
+      if (!res?.ok) throw new Error("Could not download that image URL. Save the picture and upload it instead.");
       const blob = await res.blob();
       if (!PHOTO_TYPES.includes(blob.type)) throw new Error("Supported formats: JPG, PNG, GIF, WEBP.");
       void createTwin(blob, "photo", url);
