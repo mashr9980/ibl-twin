@@ -116,7 +116,7 @@ export function ProfileSettingsDialog({
       case "preferences": return <PreferencesSection tenantKey={tenantKey} />;
       case "personalization": return <PersonalizationSection tenantKey={tenantKey} />;
       case "general": return <GeneralSection tenantKey={tenantKey} />;
-      case "billing": return <BillingSection tenantKey={tenantKey} isAdmin={isAdmin} onClose={onClose} />;
+      case "billing": return <BillingSection onClose={onClose} />;
       case "usage": return <UsageSection isAdmin={isAdmin} onClose={onClose} />;
       case "security": return <SecuritySection onClose={onClose} />;
       case "api": return <ApiSection tenantKey={tenantKey} />;
