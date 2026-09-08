@@ -18,15 +18,22 @@ type State =
 
 type CheckoutAnswer = { checkout_url?: string; already?: boolean };
 
+export const PRIMARY_BUTTON =
+  "inline-flex h-10 items-center justify-center rounded-[8px] bg-[#2563EB] px-5 text-sm font-medium text-white transition-colors hover:bg-[#1d4fd8] disabled:pointer-events-none disabled:opacity-50";
+export const LINK_BUTTON = "text-sm text-[#2563EB] underline-offset-4 hover:underline";
+export const CAPTION = "text-sm text-[var(--content-caption)]";
+
+/** A spinner and one line of text on an empty screen. */
 export function Loader({ caption }: { caption: string }) {
   return (
-    <div className="auth-card">
-      <div className="auth-card__stack" style={{ textAlign: "center" }}>
-        <div className="join-spinner" aria-hidden="true" />
-        <p className="join-muted" aria-live="polite">
-          {caption}
-        </p>
-      </div>
+    <div className="flex flex-col items-center gap-4">
+      <span
+        className="size-8 animate-spin rounded-full border-[3px] border-[#2563EB]/20 border-t-[#2563EB]"
+        aria-hidden="true"
+      />
+      <p className={CAPTION} aria-live="polite">
+        {caption}
+      </p>
     </div>
   );
 }
@@ -79,47 +86,40 @@ export function AutoCheckout({ canceled }: { canceled: boolean }) {
   };
 
   const signOut = (
-    <p className="auth-card__signup">
-      Not you?{" "}
-      <button type="button" className="link-button" onClick={handleLogout}>
-        Sign out
-      </button>
-    </p>
+    <button type="button" className={LINK_BUTTON} onClick={handleLogout}>
+      Not you? Sign out
+    </button>
   );
 
   if (state.kind === "working") return <Loader caption={state.caption} />;
 
   if (state.kind === "closed") {
     return (
-      <div className="auth-card">
-        <div className="auth-card__stack" style={{ textAlign: "center" }}>
-          <p className="join-muted">Joining isn&apos;t open yet. Check back soon.</p>
-          {admin && (
-            <Link className="btn btn--primary" href="/account#payments">
-              Publish a plan
-            </Link>
-          )}
-          {signOut}
-        </div>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <p className={CAPTION}>Joining isn&apos;t open yet. Check back soon.</p>
+        {admin && (
+          <Link className={PRIMARY_BUTTON} href="/account#payments">
+            Publish a plan
+          </Link>
+        )}
+        {signOut}
       </div>
     );
   }
 
   return (
-    <div className="auth-card">
-      <div className="auth-card__stack" style={{ textAlign: "center" }}>
-        {state.kind === "canceled" ? (
-          <p className="join-muted">Payment was cancelled. Subscribe to join.</p>
-        ) : (
-          <p className="field-error" role="alert">
-            {state.message}
-          </p>
-        )}
-        <button type="button" className="btn btn--primary" onClick={retry}>
-          {state.kind === "canceled" ? "Continue to payment" : "Try again"}
-        </button>
-        {signOut}
-      </div>
+    <div className="flex flex-col items-center gap-4 text-center">
+      {state.kind === "canceled" ? (
+        <p className={CAPTION}>Payment was cancelled.</p>
+      ) : (
+        <p className="text-sm text-[#b5551a]" role="alert">
+          {state.message}
+        </p>
+      )}
+      <button type="button" className={PRIMARY_BUTTON} onClick={retry}>
+        {state.kind === "canceled" ? "Continue to payment" : "Try again"}
+      </button>
+      {signOut}
     </div>
   );
 }

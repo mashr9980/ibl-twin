@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import { hasLiveDmToken, saveReturnPath } from "@/lib/iblai/auth-utils";
 import { PaywallRequestError, errorMessage, paywallFetch, type AccessView } from "@/lib/paywall-client";
-import { Loader } from "@/components/twin/auto-checkout";
+import { CAPTION, Loader, PRIMARY_BUTTON } from "@/components/twin/auto-checkout";
 
 const POLL_MS = 3_000;
 const DEADLINE_MS = 60_000;
@@ -59,33 +59,31 @@ export function CheckoutReturn({ sessionId, onSignIn }: { sessionId: string; onS
   if (shown.kind === "checking") return <Loader caption="Confirming your payment…" />;
 
   return (
-    <div className="auth-card">
-      <div className="auth-card__stack" style={{ textAlign: "center" }}>
-        {shown.kind === "signin" ? (
-          <>
-            <p className="join-muted">Sign in with the account you paid with to finish joining.</p>
-            <button type="button" className="btn btn--primary" onClick={onSignIn}>
-              Sign in
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="field-error" role="alert">
-              {shown.message}
-            </p>
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => {
-                setState({ kind: "checking" });
-                setAttempt((a) => a + 1);
-              }}
-            >
-              Try again
-            </button>
-          </>
-        )}
-      </div>
+    <div className="flex flex-col items-center gap-4 text-center">
+      {shown.kind === "signin" ? (
+        <>
+          <p className={CAPTION}>Sign in with the account you paid with to finish joining.</p>
+          <button type="button" className={PRIMARY_BUTTON} onClick={onSignIn}>
+            Sign in
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-[#b5551a]" role="alert">
+            {shown.message}
+          </p>
+          <button
+            type="button"
+            className={PRIMARY_BUTTON}
+            onClick={() => {
+              setState({ kind: "checking" });
+              setAttempt((a) => a + 1);
+            }}
+          >
+            Try again
+          </button>
+        </>
+      )}
     </div>
   );
 }

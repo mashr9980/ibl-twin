@@ -1,6 +1,6 @@
 "use client";
 
-// The access screen: a loader between the app, the Auth SPA and Stripe.
+// An empty screen with a loader between the app, the Auth SPA and Stripe.
 // Signed out → Auth SPA. Signed in, not a member → Stripe (or the app when
 // already paid). Back from Stripe (?session_id) → confirm and open the app.
 
@@ -16,9 +16,23 @@ import { CheckoutReturn } from "@/components/twin/checkout-return";
 
 type Step = "handoff" | "join" | "return" | "notice";
 
+function Screen({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[var(--background)] px-6">
+      {children}
+    </main>
+  );
+}
+
 export default function JoinPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <Screen>
+          <Loader caption="Loading…" />
+        </Screen>
+      }
+    >
       <AccessScreen />
     </Suspense>
   );
@@ -59,72 +73,21 @@ function AccessScreen() {
     if (step === "handoff") signIn();
   }, [step, visitor, router]);
 
-  const body =
-    step === "return" ? (
-      <CheckoutReturn sessionId={sessionId} onSignIn={signIn} />
-    ) : step === "join" ? (
-      visitor.member ? (
-        <Loader caption="Opening the app…" />
-      ) : (
-        <AutoCheckout canceled={canceled} />
-      )
-    ) : step === "notice" && notice ? (
-      <AuthNotice code={notice} onSignIn={signIn} />
-    ) : (
-      <Loader caption="Taking you to sign in…" />
-    );
-
   return (
-    <div className="min-h-screen">
-      <div
-        className="login-page w-full"
-        style={
-          {
-            "--section-gap": "3.1rem",
-            "--logo-h": "4rem",
-            "--control-h": "3.25rem",
-            "--control-font": "1.0625rem",
-            "--card-pad": "1.625rem",
-            "--stack-gap": "1.375rem",
-            "--brand-font": "2.625rem",
-          } as React.CSSProperties
-        }
-      >
-        <main className="login-column">
-          <div className="login-column__inner">
-            <div
-              className="logo-section logo-section--custom"
-              style={
-                {
-                  "--logo-img-h-custom": "43.333333333333336px",
-                  "--logo-img-margin-top-custom": "0px",
-                  "--logo-img-margin-bottom-custom": "1.3333333333333333px",
-                } as React.CSSProperties
-              }
-            >
-              <div className="logo-section__row">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="logo-section__img" alt="memorare twin" src="/images/memorare-twin-logo.png" />
-                <div className="logo-section__text">
-                  <span className="logo-section__line logo-section__line--top">memorare</span>
-                  <span className="logo-section__line-wrap logo-section__line-wrap--bottom">
-                    <span className="logo-section__line logo-section__line--bottom">twin</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="auth-main">
-              {body}
-              <div className="auth-card__legal">
-                <a target="_blank" rel="noopener noreferrer" href="/terms">Terms of Use</a>
-                <span className="sep">|</span>
-                <a target="_blank" rel="noopener noreferrer" href="/privacy">Privacy Policy</a>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
+    <Screen>
+      {step === "return" ? (
+        <CheckoutReturn sessionId={sessionId} onSignIn={signIn} />
+      ) : step === "join" ? (
+        visitor.member ? (
+          <Loader caption="Opening the app…" />
+        ) : (
+          <AutoCheckout canceled={canceled} />
+        )
+      ) : step === "notice" && notice ? (
+        <AuthNotice code={notice} onSignIn={signIn} />
+      ) : (
+        <Loader caption="Taking you to sign in…" />
+      )}
+    </Screen>
   );
 }
