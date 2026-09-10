@@ -41,7 +41,7 @@ const PROFILE_NAV: NavItem[] = [
 
 const WORKSPACE_NAV: NavItem[] = [
   { key: "general", label: "General", icon: Building2, adminOnly: true },
-  { key: "billing", label: "Plan & Billing", icon: CreditCard, adminOnly: true },
+  { key: "billing", label: "Plan & Billing", icon: CreditCard },
   { key: "usage", label: "Usage & History", icon: History },
   { key: "security", label: "Security", icon: Shield, adminOnly: true },
   { key: "api", label: "API", icon: Code, adminOnly: true },
