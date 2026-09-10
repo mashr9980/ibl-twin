@@ -56,6 +56,19 @@ export function currentUserEmail(): string {
   }
 }
 
+export function currentUserFirstName(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const raw = localStorage.getItem("userData");
+    if (!raw) return "";
+    const u = JSON.parse(raw);
+    const name: string = u.user_fullname?.trim() || u.user_display_name?.trim() || u.user_nicename || "";
+    return name.split(/\s+/)[0] ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function loginNoticeUrl(code: NoticeCode, email = ""): string {
   const params = new URLSearchParams({ [NOTICE_PARAM]: code });
   if (email) params.set(EMAIL_PARAM, email);

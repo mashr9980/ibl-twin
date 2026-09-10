@@ -4,13 +4,15 @@
 // empty state until the member fills it in. Everything is saved to their
 // platform metadata, so it follows the account.
 
-import { useState } from "react";
-import { BookText, Brain, Palette, Trash2, User } from "lucide-react";
+import { useRef, useState } from "react";
+import { Box, ChevronDown, FileText, Plus, SlidersHorizontal, Trash2, Upload, User } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Alert } from "@/components/twin/alert";
-import { useTwinPreferences, type GlossaryTerm, type TwinBrand, type TwinProfile } from "@/hooks/use-twin-preferences";
+import { useTwinPreferences, type GlossaryKind, type GlossaryTerm, type TwinProfile } from "@/hooks/use-twin-preferences";
+import { currentUserFirstName } from "@/lib/iblai/access";
 import { cn } from "@/lib/utils";
+import { PersonalizationSurvey } from "./personalization-survey";
 import { CHIP, CHIP_OFF, CHIP_ON, CHIP_ROW, FIELD, FIELD_LABEL, HINT, OUTLINE_BTN, PRIMARY_BTN, PRIMARY_BTN_LG, TEXTAREA } from "./ui";
 
 type Tab = "profile" | "memory" | "brand" | "glossary";
@@ -22,10 +24,10 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "glossary", label: "Brand Glossary" },
 ];
 
-const EMPTY_PROFILE: TwinProfile = { role: "", industry: "", audience: "", tone: "", topics: "" };
-const EMPTY_BRAND: TwinBrand = { primary: "#38A1E5", accent: "#7284FF", font: "", voice: "" };
+const EMPTY_PROFILE: TwinProfile = { use: "", role: "", industry: "", audience: "", tone: "", topics: "" };
 
 const PROFILE_FIELDS: { key: keyof TwinProfile; label: string; placeholder: string }[] = [
+  { key: "use", label: "Using Memorare Twin for", placeholder: "Business, personal, or student use" },
   { key: "role", label: "What do you do?", placeholder: "Founder, teacher, marketer…" },
   { key: "industry", label: "Industry", placeholder: "Education, SaaS, healthcare…" },
   { key: "audience", label: "Who watches your videos?", placeholder: "Students, customers, my team…" },
@@ -33,43 +35,84 @@ const PROFILE_FIELDS: { key: keyof TwinProfile; label: string; placeholder: stri
   { key: "topics", label: "What do you talk about?", placeholder: "Product updates, lessons, announcements" },
 ];
 
-/** twin's empty state: a muted tile, a title, a line of explanation and one action. */
+/** twin's empty state: a muted tile, a title, a line of explanation and, usually, one action. */
 function EmptyState({
   icon: Icon,
   title,
   description,
   action,
   onAction,
+  className,
+  descriptionClassName,
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
-  action: string;
-  onAction: () => void;
+  action?: string;
+  onAction?: () => void;
+  className?: string;
+  descriptionClassName?: string;
 }) {
   return (
-    <div className="flex min-h-[320px] flex-col items-center justify-center px-4 py-10 text-center sm:min-h-[360px]">
+    <div className={cn("flex min-h-[320px] flex-col items-center justify-center px-4 py-10 text-center sm:min-h-[360px]", className)}>
       <div className="mb-5 flex size-16 items-center justify-center rounded-[8px] bg-[var(--muted)] text-[var(--muted-foreground)]" aria-hidden="true">
         <Icon className="size-7 text-[var(--muted-foreground)]" strokeWidth={1.5} />
       </div>
       <h3 className="text-base font-semibold text-[var(--foreground)]">{title}</h3>
-      <p className="mt-2 max-w-sm text-sm text-[var(--muted-foreground)]">{description}</p>
-      <button type="button" onClick={onAction} className={cn(PRIMARY_BTN_LG, "mt-6")}>
-        {action}
-      </button>
+      <p className={cn("mt-2 max-w-sm text-sm text-[var(--muted-foreground)]", descriptionClassName)}>{description}</p>
+      {action && onAction && (
+        <button type="button" onClick={onAction} className={cn(PRIMARY_BTN_LG, "mt-6")}>
+          {action}
+        </button>
+      )}
     </div>
   );
 }
+
+type GlossaryView = "pronunciation" | "translation";
+
+// twin's two views; Translations shows two sections side by side
+const GLOSSARY_VIEWS: { key: GlossaryView; label: string; sections: GlossaryKind[] }[] = [
+  { key: "pronunciation", label: "Pronunciations", sections: ["pronunciation"] },
+  { key: "translation", label: "Translations", sections: ["force_translate", "dont_translate"] },
+];
+
+const GLOSSARY_SECTIONS: Record<GlossaryKind, { label: string; meaning: string | null; placeholder: string }> = {
+  pronunciation: { label: "Pronunciations", meaning: "How to say it", placeholder: 'Say "eye-bee-ell dot AI"' },
+  force_translate: { label: "Force Translate", meaning: "Translation", placeholder: "The word in the other language" },
+  dont_translate: { label: "Don't Translate", meaning: null, placeholder: "" },
+};
+
+/** A CSV of `term,meaning` rows. A header row is skipped, quotes are stripped. */
+function parseGlossaryCsv(text: string): { term: string; meaning: string }[] {
+  const clean = (v: string) => v.trim().replace(/^"(.*)"$/, "$1").trim();
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const at = line.indexOf(",");
+      return at === -1 ? { term: clean(line), meaning: "" } : { term: clean(line.slice(0, at)), meaning: clean(line.slice(at + 1)) };
+    })
+    .filter((r, i) => r.term && !(i === 0 && /^(term|word|name)$/i.test(r.term)));
+}
+
+// twin's toolbar controls on the Memory tab
+const TOOL_BTN =
+  "inline-flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-normal text-[var(--foreground)] shadow-none transition-colors hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0";
 
 export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
   const { prefs, save, saving, error } = useTwinPreferences(tenantKey);
   const [tab, setTab] = useState<Tab>("profile");
   const [survey, setSurvey] = useState<TwinProfile | null>(null);
-  const [brandDraft, setBrandDraft] = useState<TwinBrand | null>(null);
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
   const [term, setTerm] = useState<GlossaryTerm>({ term: "", meaning: "" });
-  const [termOpen, setTermOpen] = useState(false);
+  const [termOpen, setTermOpen] = useState<GlossaryKind | null>(null);
+  const [view, setView] = useState<GlossaryView>("pronunciation");
+  const csvInput = useRef<HTMLInputElement>(null);
+  const csvTarget = useRef<GlossaryKind>("pronunciation");
+  const [memoryMenu, setMemoryMenu] = useState(false);
 
   const store = (patch: Parameters<typeof save>[0]) => void save(patch).catch(() => {});
 
@@ -95,38 +138,7 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
         {error && <Alert tone="warning" className="mb-4">Couldn&apos;t save that. Please try again.</Alert>}
 
         {tab === "profile" &&
-          (survey ? (
-            <div className="space-y-5">
-              {PROFILE_FIELDS.map((f) => (
-                <div key={f.key} className="space-y-2">
-                  <label className={FIELD_LABEL} htmlFor={`profile-${f.key}`}>{f.label}</label>
-                  <input
-                    id={`profile-${f.key}`}
-                    className={cn(FIELD, "sm:max-w-md")}
-                    placeholder={f.placeholder}
-                    value={survey[f.key]}
-                    onChange={(e) => setSurvey({ ...survey, [f.key]: e.target.value })}
-                  />
-                </div>
-              ))}
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  className={PRIMARY_BTN}
-                  disabled={saving || !survey.role.trim()}
-                  onClick={() => {
-                    store({ profile: survey });
-                    setSurvey(null);
-                  }}
-                >
-                  {saving ? "Saving…" : "Save profile"}
-                </button>
-                <button type="button" className={OUTLINE_BTN} onClick={() => setSurvey(null)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : prefs.profile ? (
+          (prefs.profile ? (
             <div className="space-y-5">
               <dl className="space-y-4">
                 {PROFILE_FIELDS.filter((f) => prefs.profile?.[f.key]).map((f) => (
@@ -155,9 +167,64 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
             />
           ))}
 
-        {tab === "memory" &&
-          (prefs.memory.length || noteOpen ? (
-            <div className="space-y-5">
+        <PersonalizationSurvey
+          open={survey !== null}
+          initial={survey ?? EMPTY_PROFILE}
+          onClose={() => setSurvey(null)}
+          onComplete={(profile) => {
+            store({ profile });
+            setSurvey(null);
+          }}
+        />
+
+        {tab === "memory" && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="relative">
+                <select
+                  aria-label="Filter memory"
+                  className={cn(TOOL_BTN, "w-auto min-w-[130px] appearance-none pr-8")}
+                  defaultValue="all"
+                >
+                  <option value="all">All memory</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 opacity-50" aria-hidden="true" />
+              </div>
+              <button type="button" className={TOOL_BTN} onClick={() => setNoteOpen(true)}>
+                <Plus strokeWidth={1.75} aria-hidden="true" />
+                Add
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="Memory actions"
+                  aria-haspopup="menu"
+                  aria-expanded={memoryMenu}
+                  disabled={prefs.memory.length === 0}
+                  onClick={() => setMemoryMenu((v) => !v)}
+                  className={cn(TOOL_BTN, "size-9 px-0")}
+                >
+                  <SlidersHorizontal strokeWidth={1.75} aria-hidden="true" />
+                </button>
+                {memoryMenu && (
+                  <div role="menu" className="absolute right-0 z-10 mt-1 min-w-[180px] rounded-[8px] border border-[var(--border)] bg-[var(--card)] p-1 shadow-md">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center rounded-[6px] px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                      onClick={() => {
+                        store({ memory: [] });
+                        setMemoryMenu(false);
+                      }}
+                    >
+                      Clear all memories
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {noteOpen && (
               <div className="space-y-2">
                 <label className={FIELD_LABEL} htmlFor="memory-note">Something your twin should remember</label>
                 <textarea
@@ -167,18 +234,27 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />
-                <button
-                  type="button"
-                  className={PRIMARY_BTN}
-                  disabled={!note.trim() || saving}
-                  onClick={() => {
-                    store({ memory: [note.trim(), ...prefs.memory] });
-                    setNote("");
-                  }}
-                >
-                  {saving ? "Saving…" : "Add"}
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className={PRIMARY_BTN}
+                    disabled={!note.trim() || saving}
+                    onClick={() => {
+                      store({ memory: [note.trim(), ...prefs.memory] });
+                      setNote("");
+                      setNoteOpen(false);
+                    }}
+                  >
+                    {saving ? "Saving…" : "Add"}
+                  </button>
+                  <button type="button" className={OUTLINE_BTN} onClick={() => { setNote(""); setNoteOpen(false); }}>
+                    Cancel
+                  </button>
+                </div>
               </div>
+            )}
+
+            {prefs.memory.length ? (
               <ul className="space-y-2">
                 {prefs.memory.map((m, i) => (
                   <li key={`${m}-${i}`} className="flex items-start justify-between gap-3 rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
@@ -194,124 +270,184 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
                   </li>
                 ))}
               </ul>
-            </div>
-          ) : (
-            <EmptyState
-              icon={Brain}
-              title="Nothing remembered yet"
-              description="Add facts, phrases and rules your twin should keep in mind when it writes for you."
-              action="Add a memory"
-              onAction={() => setNoteOpen(true)}
-            />
-          ))}
+            ) : (
+              !noteOpen && (
+                <EmptyState
+                  icon={Box}
+                  title="No memories yet"
+                  description="As you use Memorare Twin, it will learn from your conversations and save helpful information here."
+                  className="min-h-[280px] py-12 sm:min-h-[280px]"
+                  descriptionClassName="max-w-md"
+                />
+              )
+            )}
+          </div>
+        )}
 
-        {tab === "brand" &&
-          (brandDraft ? (
-            <div className="space-y-5">
-              <div className="grid gap-5 sm:max-w-md sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className={FIELD_LABEL} htmlFor="brand-primary">Primary colour</label>
-                  <input id="brand-primary" type="color" className="h-10 w-full rounded-[8px] border border-[var(--input)] bg-[var(--background)]" value={brandDraft.primary} onChange={(e) => setBrandDraft({ ...brandDraft, primary: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <label className={FIELD_LABEL} htmlFor="brand-accent">Accent colour</label>
-                  <input id="brand-accent" type="color" className="h-10 w-full rounded-[8px] border border-[var(--input)] bg-[var(--background)]" value={brandDraft.accent} onChange={(e) => setBrandDraft({ ...brandDraft, accent: e.target.value })} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className={FIELD_LABEL} htmlFor="brand-font">Typeface</label>
-                <input id="brand-font" className={cn(FIELD, "sm:max-w-md")} placeholder="Inter, Söhne, Georgia…" value={brandDraft.font} onChange={(e) => setBrandDraft({ ...brandDraft, font: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <label className={FIELD_LABEL} htmlFor="brand-voice">Voice and tone</label>
-                <textarea id="brand-voice" className={cn(TEXTAREA, "sm:max-w-md")} placeholder="Plain, warm, never salesy." value={brandDraft.voice} onChange={(e) => setBrandDraft({ ...brandDraft, voice: e.target.value })} />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button type="button" className={PRIMARY_BTN} disabled={saving} onClick={() => { store({ brand: brandDraft }); setBrandDraft(null); }}>
-                  {saving ? "Saving…" : "Save brand"}
-                </button>
-                <button type="button" className={OUTLINE_BTN} onClick={() => setBrandDraft(null)}>Cancel</button>
-              </div>
-            </div>
-          ) : prefs.brand ? (
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-3">
-                {(["primary", "accent"] as const).map((k) => (
-                  <span key={k} className="inline-flex items-center gap-2 rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)]">
-                    <span className="size-4 rounded-full border border-[var(--border)]" style={{ background: prefs.brand?.[k] }} aria-hidden="true" />
-                    {prefs.brand?.[k]}
-                  </span>
-                ))}
-              </div>
-              {prefs.brand.font && <p className="text-sm text-[var(--muted-foreground)]">Typeface: {prefs.brand.font}</p>}
-              {prefs.brand.voice && <p className="max-w-md text-sm text-[var(--muted-foreground)]">{prefs.brand.voice}</p>}
-              <div className="flex flex-wrap gap-3">
-                <button type="button" className={OUTLINE_BTN} onClick={() => setBrandDraft({ ...EMPTY_BRAND, ...prefs.brand })}>Edit brand</button>
-                <button type="button" className={OUTLINE_BTN} onClick={() => store({ brand: null })}>Clear</button>
-              </div>
-            </div>
-          ) : (
-            <EmptyState
-              icon={Palette}
-              title="No brand system yet"
-              description="Set your colours, typeface and tone so every video you make looks and sounds like you."
-              action="Set up brand"
-              onAction={() => setBrandDraft(EMPTY_BRAND)}
-            />
-          ))}
+        {tab === "brand" && (
+          <div className="flex min-h-[280px] items-center justify-center px-4 py-10">
+            <p className="text-center text-sm text-[var(--muted-foreground)]">Brand System is coming soon.</p>
+          </div>
+        )}
 
         {tab === "glossary" &&
-          (prefs.glossary.length || termOpen ? (
-            <div className="space-y-5">
-              <div className="grid gap-3 sm:max-w-xl sm:grid-cols-[1fr_2fr]">
-                <div className="space-y-2">
-                  <label className={FIELD_LABEL} htmlFor="glossary-term">Term</label>
-                  <input id="glossary-term" className={FIELD} placeholder="ibl.ai" value={term.term} onChange={(e) => setTerm({ ...term, term: e.target.value })} />
+          (() => {
+            const current = GLOSSARY_VIEWS.find((v) => v.key === view) ?? GLOSSARY_VIEWS[0];
+            const owner = currentUserFirstName();
+            const kindOf = (g: GlossaryTerm): GlossaryKind => g.kind ?? "pronunciation";
+            const pickCsv = (kind: GlossaryKind) => {
+              csvTarget.current = kind;
+              csvInput.current?.click();
+            };
+            const importCsv = async (file: File) => {
+              const rows = parseGlossaryCsv(await file.text()).map((r) => ({ ...r, kind: csvTarget.current }));
+              if (rows.length) store({ glossary: [...rows, ...prefs.glossary] });
+            };
+            const addTerm = (kind: GlossaryKind) => {
+              store({ glossary: [{ term: term.term.trim(), meaning: term.meaning.trim(), kind }, ...prefs.glossary] });
+              setTerm({ term: "", meaning: "" });
+              setTermOpen(null);
+            };
+            const ICON_BTN = "inline-flex size-8 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]";
+
+            const renderSection = (kind: GlossaryKind, withActions: boolean) => {
+              const meta = GLOSSARY_SECTIONS[kind];
+              const entries = prefs.glossary.filter((g) => kindOf(g) === kind);
+              const editing = termOpen === kind;
+              return (
+                <section key={kind} className="min-w-0 flex-1 space-y-3">
+                  {withActions ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-medium text-[var(--foreground)]">{meta.label}</h3>
+                      <div className="flex items-center gap-1">
+                        <button type="button" aria-label={`Add ${meta.label.toLowerCase().replace(/s$/, "")}`} onClick={() => setTermOpen(kind)} className={ICON_BTN}>
+                          <Plus className="size-4" strokeWidth={1.75} aria-hidden="true" />
+                        </button>
+                        <button type="button" aria-label={`Upload ${meta.label.toLowerCase()} CSV`} onClick={() => pickCsv(kind)} className={ICON_BTN}>
+                          <Upload className="size-4" strokeWidth={1.75} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <h3 className="text-sm font-medium text-[var(--foreground)]">{meta.label}</h3>
+                  )}
+
+                  <div className="rounded-[8px] border border-[var(--border)] bg-[var(--card)]">
+                    {editing && (
+                      <div className="space-y-3 border-b border-[var(--border)] p-4">
+                        <div className={cn("grid gap-3", meta.meaning && "sm:grid-cols-[1fr_2fr]")}>
+                          <div className="space-y-2">
+                            <label className={FIELD_LABEL} htmlFor={`glossary-${kind}-term`}>Term</label>
+                            <input id={`glossary-${kind}-term`} className={FIELD} placeholder="ibl.ai" value={term.term} onChange={(e) => setTerm({ ...term, term: e.target.value })} />
+                          </div>
+                          {meta.meaning && (
+                            <div className="space-y-2">
+                              <label className={FIELD_LABEL} htmlFor={`glossary-${kind}-meaning`}>{meta.meaning}</label>
+                              <input id={`glossary-${kind}-meaning`} className={FIELD} placeholder={meta.placeholder} value={term.meaning} onChange={(e) => setTerm({ ...term, meaning: e.target.value })} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          <button type="button" className={PRIMARY_BTN} disabled={!term.term.trim() || saving} onClick={() => addTerm(kind)}>
+                            {saving ? "Saving…" : "Add term"}
+                          </button>
+                          <button type="button" className={OUTLINE_BTN} onClick={() => { setTerm({ term: "", meaning: "" }); setTermOpen(null); }}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {entries.length ? (
+                      <ul className="divide-y divide-[var(--border)]">
+                        {entries.map((g) => {
+                          const i = prefs.glossary.indexOf(g);
+                          return (
+                            <li key={`${g.term}-${i}`} className="flex items-start justify-between gap-3 px-4 py-3">
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-[var(--foreground)]">{g.term}</span>
+                                {g.meaning && <span className="block text-sm text-[var(--muted-foreground)]">{g.meaning}</span>}
+                              </span>
+                              <button type="button" aria-label={`Remove ${g.term}`} onClick={() => store({ glossary: prefs.glossary.filter((_, j) => j !== i) })} className="shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]">
+                                <Trash2 className="size-4" strokeWidth={1.75} />
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      !editing && (
+                        <div className="flex min-h-[220px] flex-col items-center justify-center px-4 py-10 text-center">
+                          <FileText className="mb-4 size-10 text-[var(--brand)] dark:text-[var(--brand-on-dark)]" strokeWidth={1.25} aria-hidden="true" />
+                          <p className="text-sm text-[var(--muted-foreground)]">{`No '${meta.label}' added yet`}</p>
+                          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                            <button type="button" className={cn(TOOL_BTN, "gap-2 px-4")} onClick={() => pickCsv(kind)}>
+                              <Upload strokeWidth={1.75} aria-hidden="true" />
+                              Upload CSV
+                            </button>
+                            <button type="button" className={cn(TOOL_BTN, "gap-2 px-4")} onClick={() => setTermOpen(kind)}>
+                              <Plus strokeWidth={1.75} aria-hidden="true" />
+                              Add manually
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </section>
+              );
+            };
+
+            return (
+              <div className="space-y-5">
+                <input
+                  ref={csvInput}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void importCsv(f);
+                    e.target.value = "";
+                  }}
+                />
+
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex justify-center sm:flex-1 sm:justify-center">
+                    <div role="tablist" aria-label="Glossary view" className="inline-flex rounded-[8px] border border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_50%,transparent)] p-1">
+                      {GLOSSARY_VIEWS.map((v) => (
+                        <button
+                          key={v.key}
+                          type="button"
+                          role="tab"
+                          aria-selected={view === v.key}
+                          onClick={() => { setView(v.key); setTermOpen(null); }}
+                          className={cn(
+                            "rounded-[8px] px-4 py-1.5 text-sm font-medium transition-colors",
+                            view === v.key ? "bg-[var(--card)] text-[var(--foreground)] shadow-sm" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+                          )}
+                        >
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="relative w-full sm:w-auto">
+                    <select aria-label="Glossary" className={cn(TOOL_BTN, "w-full min-w-[200px] appearance-none justify-between pr-8 sm:w-auto sm:min-w-[220px]")} defaultValue="own">
+                      <option value="own">{owner ? `${owner} Brand Glossary` : "My Brand Glossary"}</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 opacity-50" aria-hidden="true" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className={FIELD_LABEL} htmlFor="glossary-meaning">How to say or use it</label>
-                  <input id="glossary-meaning" className={FIELD} placeholder='Say "eye-bee-ell dot AI"' value={term.meaning} onChange={(e) => setTerm({ ...term, meaning: e.target.value })} />
-                </div>
+
+                {current.sections.length > 1 ? (
+                  <div className="grid gap-6 lg:grid-cols-2">{current.sections.map((k) => renderSection(k, false))}</div>
+                ) : (
+                  renderSection(current.sections[0], true)
+                )}
               </div>
-              <button
-                type="button"
-                className={PRIMARY_BTN}
-                disabled={!term.term.trim() || saving}
-                onClick={() => {
-                  store({ glossary: [{ term: term.term.trim(), meaning: term.meaning.trim() }, ...prefs.glossary] });
-                  setTerm({ term: "", meaning: "" });
-                }}
-              >
-                {saving ? "Saving…" : "Add term"}
-              </button>
-              <ul className="divide-y divide-[var(--border)] rounded-[8px] border border-[var(--border)]">
-                {prefs.glossary.map((g, i) => (
-                  <li key={`${g.term}-${i}`} className="flex items-start justify-between gap-3 px-4 py-3">
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-[var(--foreground)]">{g.term}</span>
-                      {g.meaning && <span className="block text-sm text-[var(--muted-foreground)]">{g.meaning}</span>}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${g.term}`}
-                      onClick={() => store({ glossary: prefs.glossary.filter((_, j) => j !== i) })}
-                      className="shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-                    >
-                      <Trash2 className="size-4" strokeWidth={1.75} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <EmptyState
-              icon={BookText}
-              title="No glossary yet"
-              description="Teach your twin the names, products and phrases it must always get right."
-              action="Add a term"
-              onAction={() => setTermOpen(true)}
-            />
-          ))}
+            );
+          })()}
 
         <p className={cn(HINT, "mt-6")} aria-live="polite">{saving ? "Saving…" : ""}</p>
       </div>

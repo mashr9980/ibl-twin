@@ -22,6 +22,7 @@ export type Theme = "light" | "dark" | "system";
 
 /** What the member told us about themselves, for scripts and styling. */
 export interface TwinProfile {
+  use?: string;
   role: string;
   industry: string;
   audience: string;
@@ -36,9 +37,12 @@ export interface TwinBrand {
   voice: string;
 }
 
+export type GlossaryKind = "pronunciation" | "force_translate" | "dont_translate";
+
 export interface GlossaryTerm {
   term: string;
   meaning: string;
+  kind?: GlossaryKind;
 }
 
 export interface TwinPreferences {

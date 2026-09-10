@@ -69,3 +69,4 @@ playwright-report/
 
 # Private Claude notes for this checkout (loaded next to CLAUDE.md, never committed)
 CLAUDE.local.md
+twin.txt
