@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 export type Category = "ALL" | "MODERN" | "HISTORY";
 
-const CHIPS: { key: Category; label: string }[] = [
+export const CHIPS: { key: Category; label: string }[] = [
   { key: "ALL", label: "All" },
   { key: "MODERN", label: "Educational" },
   { key: "HISTORY", label: "Historical" },
@@ -33,8 +33,9 @@ const PAGE = 60;
  * files under MODERN / "Educational". Historical figures are a separately
  * curated set, so the HISTORY chip reports honestly when it's empty.
  */
-function categoryOf(_a: HeygenAvatar): Category {
-  return "MODERN";
+/** Historical if the name matches a historical figure, otherwise educational. */
+export function categoryOf(a: HeygenAvatar): Category {
+  return historicalSubcategoryOf(a.avatar_name ?? "") ? "HISTORY" : "MODERN";
 }
 
 export function HeygenGate({ compact = false }: { compact?: boolean }) {
