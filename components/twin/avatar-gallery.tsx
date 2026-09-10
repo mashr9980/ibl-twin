@@ -184,31 +184,48 @@ export function CharacterCard({
   );
 }
 
-export function AvatarCard({ avatar, onSelect }: { avatar: HeygenAvatar; onSelect?: (a: HeygenAvatar) => void }) {
+export function AvatarCard({
+  avatar,
+  subtitle,
+  onSelect,
+}: {
+  avatar: HeygenAvatar;
+  /** Second line of the footer; defaults to the avatar's gender. */
+  subtitle?: string;
+  onSelect?: (a: HeygenAvatar) => void;
+}) {
+  const name = avatar.avatar_name ?? "Avatar";
+  const meta = subtitle ?? avatar.gender ?? "Avatar";
   return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(avatar)}
-      className="group overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] text-left shadow-[var(--shadow-card)] transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-    >
-      <div className="relative aspect-4/5 overflow-hidden bg-[var(--canvas-muted)]">
-        {avatar.preview_image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar.preview_image_url} alt={`${avatar.avatar_name} avatar preview`} loading="lazy" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <UserRound size={24} className="text-[var(--content-caption)]" />
-          </div>
-        )}
-        <div className="absolute inset-0 hidden items-center justify-center bg-black/45 group-hover:flex">
-          <span className="text-[13px] font-medium text-white">Click to Select</span>
+    <div className="group flex flex-col overflow-hidden rounded-[9px] border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-shadow hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+      <div className="relative aspect-[4/5] overflow-hidden bg-[color-mix(in_oklab,var(--muted)_50%,transparent)] dark:bg-[color-mix(in_oklab,var(--muted)_30%,transparent)]">
+        <button
+          type="button"
+          aria-label={`Select ${name}, ${meta}`}
+          onClick={() => onSelect?.(avatar)}
+          className="absolute inset-0 z-0 block w-full cursor-pointer text-left"
+        >
+          {avatar.preview_image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatar.preview_image_url} alt={name} loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
+          ) : (
+            <span className="flex size-full items-center justify-center"><UserRound size={24} className="text-[var(--content-caption)]" /></span>
+          )}
+        </button>
+        {/* Always visible on touch screens, where there is no hover. */}
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/50 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100" aria-hidden="true">
+          <span className="px-2 text-center text-[11px] font-semibold leading-snug text-white sm:text-xs">Click to Select</span>
         </div>
       </div>
-      <div className="p-3">
-        <p className="truncate text-[14px] font-semibold text-[var(--content-title)]">{avatar.avatar_name}</p>
-        <p className="mt-0.5 truncate text-[12px] text-[var(--content-caption)]">{avatar.gender ?? "Avatar"}</p>
-      </div>
-    </button>
+      <button
+        type="button"
+        onClick={() => onSelect?.(avatar)}
+        className="w-full border-t border-[var(--border)] px-2 py-2 text-center transition-colors hover:bg-[var(--accent)] sm:px-2.5 sm:py-1.5"
+      >
+        <span className="block truncate text-[11px] font-semibold leading-snug text-[var(--card-foreground)] sm:text-xs">{name}</span>
+        <span className="mt-0.5 block truncate text-[10px] leading-snug text-[var(--sidebar-foreground)] sm:text-[11px] dark:text-[var(--muted-foreground)]">{meta}</span>
+      </button>
+    </div>
   );
 }
 

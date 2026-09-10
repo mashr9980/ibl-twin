@@ -87,6 +87,62 @@ function PickerInner() {
 
   const visible = matching.slice(0, shown);
 
+  const openLooks = useMemo(() => {
+    if (!open) return [];
+    const q = query.trim().toLowerCase();
+    return q ? open.looks.filter((a) => lookOf(a.avatar_name ?? "").toLowerCase().includes(q)) : open.looks;
+  }, [open, query]);
+
+  const renderRow = (c: Character) => (
+                  <div key={c.name} className="flex flex-col gap-3 border-b border-[var(--border)] py-4 last:border-b-0 sm:flex-row sm:items-center sm:gap-6 sm:py-5">
+                    <div className="flex min-w-0 shrink-0 items-start gap-3 sm:w-[220px] sm:items-center md:w-[240px]">
+                      <button
+                        type="button"
+                        aria-label={`Open ${c.name}`}
+                        onClick={() => choose(c)}
+                        className="relative size-14 shrink-0 overflow-hidden rounded-full bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] ring-1 ring-[var(--border)] sm:size-16"
+                      >
+                        {c.looks[0]?.preview_image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.looks[0].preview_image_url} alt={c.name} loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
+                        ) : (
+                          <span className="flex size-full items-center justify-center"><UserRound size={20} className="text-[var(--content-caption)]" /></span>
+                        )}
+                      </button>
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <button type="button" onClick={() => choose(c)} className="truncate text-left text-[15px] font-semibold leading-snug text-[var(--sidebar-foreground)] dark:text-[var(--foreground)]">
+                            {c.name}
+                          </button>
+                        </div>
+                        <div className="mt-1.5">
+                          <span className="text-xs leading-none text-[var(--sidebar-foreground)] sm:text-[13px] dark:text-[var(--muted-foreground)]">
+                            {c.looks.length === 1 ? "1 look" : `${c.looks.length} looks`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="flex w-max items-stretch gap-2 pr-1">
+                        {c.looks.map((a, i) => (
+                          <button
+                            key={a.avatar_id}
+                            type="button"
+                            aria-label={`Select look ${i + 1} of ${c.name}`}
+                            onClick={() => setSelected(a)}
+                            className="relative h-[72px] w-[54px] shrink-0 overflow-hidden rounded-lg bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] sm:h-[88px] sm:w-[66px]"
+                          >
+                            {a.preview_image_url && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={a.preview_image_url} alt={c.name} loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+  );
+
   function choose(c: Character) {
     // One look is not a choice — go straight to generation, as twin does.
     if (c.looks.length === 1) setSelected(c.looks[0]);
@@ -113,33 +169,7 @@ function PickerInner() {
         </div>
       </header>
 
-      {open ? (
-        <>
-          <nav className="mb-5 flex flex-wrap items-center gap-2 text-[13.5px]" aria-label="Breadcrumb">
-            <button
-              type="button"
-              onClick={() => setOpen(null)}
-              className="flex items-center gap-1.5 rounded-[var(--radius-control)] px-2 py-1 text-[var(--brand)] transition-colors hover:bg-[var(--canvas-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
-            >
-              <ArrowLeft size={15} strokeWidth={1.75} /> Back
-            </button>
-            <span className="font-medium text-[var(--content-title)]">{open.name}</span>
-            <span className="text-[var(--content-caption)]">· {open.looks.length} looks</span>
-          </nav>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-            {open.looks.map((a) => (
-              // Inside a character, the full name repeats the character and
-              // truncates away the one thing that differs — show the look.
-              <AvatarCard
-                key={a.avatar_id}
-                avatar={{ ...a, avatar_name: lookOf(a.avatar_name ?? "") }}
-                onSelect={() => setSelected(a)}
-              />
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
+      <>
           <div className="mb-7 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
             <label className="relative w-full min-w-0 max-w-sm sm:max-w-[280px] md:max-w-xs">
               <span className="sr-only">Search avatars</span>
@@ -184,7 +214,7 @@ function PickerInner() {
                 key={chip.key}
                 type="button"
                 aria-pressed={category === chip.key}
-                onClick={() => setCategory(chip.key)}
+                onClick={() => { setCategory(chip.key); setOpen(null); }}
                 className={cn(
                   "inline-flex h-9 shrink-0 items-center justify-center rounded-[8px] border px-4 text-sm font-medium leading-none transition-colors",
                   category === chip.key
@@ -197,7 +227,42 @@ function PickerInner() {
             ))}
           </div>
 
-          {error === "load" ? (
+          {open ? (
+            <div className="[overflow-anchor:none]">
+              <section className="pb-8 sm:pb-12">
+                <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 sm:mb-5">
+                  <button
+                    type="button"
+                    onClick={() => setOpen(null)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--sidebar-foreground)] transition-colors hover:text-[var(--foreground)] sm:text-sm dark:text-[var(--muted-foreground)]"
+                  >
+                    <ArrowLeft className="size-4" strokeWidth={2} aria-hidden="true" />
+                    Back
+                  </button>
+                  <h2 className="text-sm font-semibold text-[var(--sidebar-foreground)] sm:text-base dark:text-[var(--foreground)]">
+                    {open.name}
+                    <span className="ml-2 text-sm font-normal text-[var(--sidebar-foreground)] dark:text-[var(--muted-foreground)]">
+                      {open.looks.length === 1 ? "1 look" : `${open.looks.length} looks`}
+                    </span>
+                  </h2>
+                </div>
+                {view === "grid" ? (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                    {openLooks.map((a) => (
+                      <AvatarCard
+                        key={a.avatar_id}
+                        avatar={{ ...a, avatar_name: open.name }}
+                        subtitle={lookOf(a.avatar_name ?? "")}
+                        onSelect={() => setSelected(a)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border-t border-[var(--border)]">{renderRow(open)}</div>
+                )}
+              </section>
+            </div>
+          ) : error === "load" ? (
             <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--card)] p-10 text-center">
               <p role="alert" className="text-[14px] font-medium text-[var(--content-title)]">Couldn&apos;t load the avatar catalogue</p>
               <button type="button" onClick={() => { invalidateAvatarCatalogue(); setError(null); setReloadKey((k) => k + 1); }}
@@ -282,60 +347,12 @@ function PickerInner() {
           ) : (
             <div className="[overflow-anchor:none]">
               <div className="border-t border-[var(--border)] pb-8 sm:pb-12">
-                {visible.map((c) => (
-                  <div key={c.name} className="flex flex-col gap-3 border-b border-[var(--border)] py-4 last:border-b-0 sm:flex-row sm:items-center sm:gap-6 sm:py-5">
-                    <div className="flex min-w-0 shrink-0 items-start gap-3 sm:w-[220px] sm:items-center md:w-[240px]">
-                      <button
-                        type="button"
-                        aria-label={`Open ${c.name}`}
-                        onClick={() => choose(c)}
-                        className="relative size-14 shrink-0 overflow-hidden rounded-full bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] ring-1 ring-[var(--border)] sm:size-16"
-                      >
-                        {c.looks[0]?.preview_image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={c.looks[0].preview_image_url} alt={c.name} loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
-                        ) : (
-                          <span className="flex size-full items-center justify-center"><UserRound size={20} className="text-[var(--content-caption)]" /></span>
-                        )}
-                      </button>
-                      <div className="min-w-0 flex-1 pt-0.5">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <button type="button" onClick={() => choose(c)} className="truncate text-left text-[15px] font-semibold leading-snug text-[var(--sidebar-foreground)] dark:text-[var(--foreground)]">
-                            {c.name}
-                          </button>
-                        </div>
-                        <div className="mt-1.5">
-                          <span className="text-xs leading-none text-[var(--sidebar-foreground)] sm:text-[13px] dark:text-[var(--muted-foreground)]">
-                            {c.looks.length === 1 ? "1 look" : `${c.looks.length} looks`}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="min-w-0 flex-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                      <div className="flex w-max items-stretch gap-2 pr-1">
-                        {c.looks.map((a, i) => (
-                          <button
-                            key={a.avatar_id}
-                            type="button"
-                            aria-label={`Select look ${i + 1} of ${c.name}`}
-                            onClick={() => setSelected(a)}
-                            className="relative h-[72px] w-[54px] shrink-0 overflow-hidden rounded-lg bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] sm:h-[88px] sm:w-[66px]"
-                          >
-                            {a.preview_image_url && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={a.preview_image_url} alt={c.name} loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                {visible.map(renderRow)}
               </div>
             </div>
           )}
 
-          {!loading && !error && matching.length > 0 && (
+          {!open && !loading && !error && matching.length > 0 && (
             <div className="mt-6 flex flex-col items-center gap-3">
               <p className="text-[12.5px] text-[var(--content-caption)]">
                 Showing {visible.length} of {matching.length} character{matching.length === 1 ? "" : "s"}
@@ -348,8 +365,7 @@ function PickerInner() {
               )}
             </div>
           )}
-        </>
-      )}
+      </>
 
       {selected && <GenerateModal avatar={selected} onClose={() => setSelected(null)} />}
     </div>
