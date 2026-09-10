@@ -104,6 +104,19 @@ function parseGlossaryCsv(text: string): { term: string; meaning: string }[] {
 
 type PlatformMemory = { id: number; content: string; is_auto_generated?: boolean; created_at?: string };
 
+// The platform rejects shorter memories with a field error.
+const MEMORY_MIN = 10;
+
+/** The platform answers a bad memory with `{ content: ["..."] }`; say it plainly. */
+function memoryErrorMessage(err: unknown): string {
+  const data = (err as { data?: { content?: unknown } } | undefined)?.data;
+  const first = Array.isArray(data?.content) ? data?.content[0] : undefined;
+  if (typeof first === "string" && /at least \d+ characters/i.test(first)) {
+    return `Memories need at least ${MEMORY_MIN} characters.`;
+  }
+  return "Couldn't save that memory. Please try again.";
+}
+
 // twin's toolbar controls on the Memory tab
 const TOOL_BTN =
   "inline-flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-normal text-[var(--foreground)] shadow-none transition-colors hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0";
@@ -136,12 +149,18 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
   }, [memories.data, memoryFilter]);
   const memoryBusy = creating.isLoading || deleting.isLoading;
 
-  const remember = async (content: string) => {
+  const remember = async (content: string): Promise<boolean> => {
     setMemoryError(null);
+    if (content.length < MEMORY_MIN) {
+      setMemoryError(`Memories need at least ${MEMORY_MIN} characters.`);
+      return false;
+    }
     try {
       await createMemory({ org: tenantKey, userId: username, content } as never).unwrap();
-    } catch {
-      setMemoryError("Couldn't save that memory. Please try again.");
+      return true;
+    } catch (err) {
+      setMemoryError(memoryErrorMessage(err));
+      return false;
     }
   };
   const forget = async (ids: number[]) => {
@@ -275,16 +294,24 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
                   placeholder="We ship on Thursdays. Never say 'synergy'."
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
+                  aria-describedby="memory-note-hint"
+                  aria-invalid={note.trim().length > 0 && note.trim().length < MEMORY_MIN}
                 />
+                <p id="memory-note-hint" className={HINT} aria-live="polite">
+                  {note.trim().length > 0 && note.trim().length < MEMORY_MIN
+                    ? `Memories need at least ${MEMORY_MIN} characters (${MEMORY_MIN - note.trim().length} more).`
+                    : `At least ${MEMORY_MIN} characters.`}
+                </p>
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
                     className={PRIMARY_BTN}
-                    disabled={!note.trim() || memoryBusy}
-                    onClick={() => {
-                      void remember(note.trim());
-                      setNote("");
-                      setNoteOpen(false);
+                    disabled={note.trim().length < MEMORY_MIN || memoryBusy}
+                    onClick={async () => {
+                      if (await remember(note.trim())) {
+                        setNote("");
+                        setNoteOpen(false);
+                      }
                     }}
                   >
                     {creating.isLoading ? "Saving…" : "Add"}
