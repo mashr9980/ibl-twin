@@ -9,5 +9,9 @@
     "jsx-a11y",
     "vitest"
   ],
-  "ignorePatterns": []
+  "ignorePatterns": [
+    "agent/**",
+    ".agents/**",
+    ".claude/**"
+  ]
 }

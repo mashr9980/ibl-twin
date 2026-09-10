@@ -50,6 +50,7 @@ next-env.d.ts
 # agents
 .agents/skills
 .claude/skills
+agent/skills
 
 # Playwright: real session tokens + local creds. Never commit.
 playwright/.auth/
