@@ -56,6 +56,19 @@ export function currentUserEmail(): string {
   }
 }
 
+/** The platform username the session belongs to. */
+export function currentUsername(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const raw = localStorage.getItem("userData");
+    if (!raw) return "";
+    const u = JSON.parse(raw);
+    return u.user_nicename ?? u.username ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function currentUserFirstName(): string {
   if (typeof window === "undefined") return "";
   try {

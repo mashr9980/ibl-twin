@@ -4,13 +4,18 @@
 // empty state until the member fills it in. Everything is saved to their
 // platform metadata, so it follows the account.
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import {
+  useCreateGlobalMemoryMutation,
+  useDeleteGlobalMemoryMutation,
+  useGetGlobalMemoriesQuery,
+} from "@iblai/iblai-js/data-layer";
 import { Box, ChevronDown, FileText, Plus, SlidersHorizontal, Trash2, Upload, User } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Alert } from "@/components/twin/alert";
 import { useTwinPreferences, type GlossaryKind, type GlossaryTerm, type TwinProfile } from "@/hooks/use-twin-preferences";
-import { currentUserFirstName } from "@/lib/iblai/access";
+import { currentUserFirstName, currentUsername } from "@/lib/iblai/access";
 import { cn } from "@/lib/utils";
 import { PersonalizationSurvey } from "./personalization-survey";
 import { CHIP, CHIP_OFF, CHIP_ON, CHIP_ROW, FIELD, FIELD_LABEL, HINT, OUTLINE_BTN, PRIMARY_BTN, PRIMARY_BTN_LG, TEXTAREA } from "./ui";
@@ -97,6 +102,8 @@ function parseGlossaryCsv(text: string): { term: string; meaning: string }[] {
     .filter((r, i) => r.term && !(i === 0 && /^(term|word|name)$/i.test(r.term)));
 }
 
+type PlatformMemory = { id: number; content: string; is_auto_generated?: boolean; created_at?: string };
+
 // twin's toolbar controls on the Memory tab
 const TOOL_BTN =
   "inline-flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-normal text-[var(--foreground)] shadow-none transition-colors hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0";
@@ -113,6 +120,38 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
   const csvInput = useRef<HTMLInputElement>(null);
   const csvTarget = useRef<GlossaryKind>("pronunciation");
   const [memoryMenu, setMemoryMenu] = useState(false);
+  const [memoryFilter, setMemoryFilter] = useState<"all" | "mine" | "learned">("all");
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+
+  // The platform keeps a member's memories itself (ibl.ai memsearch): what the
+  // twin should know about them, added here or learned from their sessions.
+  const username = currentUsername();
+  const memories = useGetGlobalMemoriesQuery({ org: tenantKey, userId: username } as never, { skip: !tenantKey || !username });
+  const [createMemory, creating] = useCreateGlobalMemoryMutation();
+  const [deleteMemory, deleting] = useDeleteGlobalMemoryMutation();
+  const memoryList = useMemo(() => {
+    const raw = (memories.data as { results?: PlatformMemory[] } | PlatformMemory[] | undefined);
+    const all = Array.isArray(raw) ? raw : raw?.results ?? [];
+    return all.filter((m) => memoryFilter === "all" || (memoryFilter === "mine" ? !m.is_auto_generated : m.is_auto_generated));
+  }, [memories.data, memoryFilter]);
+  const memoryBusy = creating.isLoading || deleting.isLoading;
+
+  const remember = async (content: string) => {
+    setMemoryError(null);
+    try {
+      await createMemory({ org: tenantKey, userId: username, content } as never).unwrap();
+    } catch {
+      setMemoryError("Couldn't save that memory. Please try again.");
+    }
+  };
+  const forget = async (ids: number[]) => {
+    setMemoryError(null);
+    try {
+      await Promise.all(ids.map((memoryId) => deleteMemory({ org: tenantKey, userId: username, memoryId } as never).unwrap()));
+    } catch {
+      setMemoryError("Couldn't remove that memory. Please try again.");
+    }
+  };
 
   const store = (patch: Parameters<typeof save>[0]) => void save(patch).catch(() => {});
 
@@ -184,9 +223,12 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
                 <select
                   aria-label="Filter memory"
                   className={cn(TOOL_BTN, "w-auto min-w-[130px] appearance-none pr-8")}
-                  defaultValue="all"
+                  value={memoryFilter}
+                  onChange={(e) => setMemoryFilter(e.target.value as "all" | "mine" | "learned")}
                 >
                   <option value="all">All memory</option>
+                  <option value="mine">Added by me</option>
+                  <option value="learned">Learned automatically</option>
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 opacity-50" aria-hidden="true" />
               </div>
@@ -200,7 +242,7 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
                   aria-label="Memory actions"
                   aria-haspopup="menu"
                   aria-expanded={memoryMenu}
-                  disabled={prefs.memory.length === 0}
+                  disabled={memoryList.length === 0 || memoryBusy}
                   onClick={() => setMemoryMenu((v) => !v)}
                   className={cn(TOOL_BTN, "size-9 px-0")}
                 >
@@ -213,7 +255,7 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
                       role="menuitem"
                       className="flex w-full items-center rounded-[6px] px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
                       onClick={() => {
-                        store({ memory: [] });
+                        void forget(memoryList.map((m) => m.id));
                         setMemoryMenu(false);
                       }}
                     >
@@ -238,14 +280,14 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
                   <button
                     type="button"
                     className={PRIMARY_BTN}
-                    disabled={!note.trim() || saving}
+                    disabled={!note.trim() || memoryBusy}
                     onClick={() => {
-                      store({ memory: [note.trim(), ...prefs.memory] });
+                      void remember(note.trim());
                       setNote("");
                       setNoteOpen(false);
                     }}
                   >
-                    {saving ? "Saving…" : "Add"}
+                    {creating.isLoading ? "Saving…" : "Add"}
                   </button>
                   <button type="button" className={OUTLINE_BTN} onClick={() => { setNote(""); setNoteOpen(false); }}>
                     Cancel
@@ -254,22 +296,32 @@ export function PersonalizationSection({ tenantKey }: { tenantKey: string }) {
               </div>
             )}
 
-            {prefs.memory.length ? (
+            {memoryError && <Alert tone="warning" onDismiss={() => setMemoryError(null)}>{memoryError}</Alert>}
+            {memories.isError && !memoryError && (
+              <Alert tone="warning">Memory isn&apos;t available for your account yet. Ask the workspace owner to enable it.</Alert>
+            )}
+            {memoryList.length ? (
               <ul className="space-y-2">
-                {prefs.memory.map((m, i) => (
-                  <li key={`${m}-${i}`} className="flex items-start justify-between gap-3 rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
-                    <span className="min-w-0 text-sm text-[var(--foreground)]">{m}</span>
+                {memoryList.map((m) => (
+                  <li key={m.id} className="flex items-start justify-between gap-3 rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+                    <span className="min-w-0 text-sm text-[var(--foreground)]">
+                      {m.content}
+                      {m.is_auto_generated && <span className="ml-2 text-xs text-[var(--muted-foreground)]">learned</span>}
+                    </span>
                     <button
                       type="button"
-                      aria-label={`Forget: ${m.slice(0, 30)}`}
-                      onClick={() => store({ memory: prefs.memory.filter((_, j) => j !== i) })}
-                      className="shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                      aria-label={`Forget: ${m.content.slice(0, 30)}`}
+                      disabled={memoryBusy}
+                      onClick={() => void forget([m.id])}
+                      className="shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] disabled:opacity-50"
                     >
                       <Trash2 className="size-4" strokeWidth={1.75} />
                     </button>
                   </li>
                 ))}
               </ul>
+            ) : memories.isLoading ? (
+              <p className={cn(HINT, "py-6 text-center")}>Loading…</p>
             ) : (
               !noteOpen && (
                 <EmptyState

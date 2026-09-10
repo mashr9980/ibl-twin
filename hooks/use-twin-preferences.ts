@@ -49,7 +49,6 @@ export interface TwinPreferences {
   theme: Theme;
   language: Language;
   profile: TwinProfile | null;
-  memory: string[];
   brand: TwinBrand | null;
   glossary: GlossaryTerm[];
 }
@@ -58,7 +57,6 @@ export const DEFAULT_PREFERENCES: TwinPreferences = {
   theme: "system",
   language: "en",
   profile: null,
-  memory: [],
   brand: null,
   glossary: [],
 };
