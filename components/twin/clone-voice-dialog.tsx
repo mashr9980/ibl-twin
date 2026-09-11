@@ -1,25 +1,18 @@
 "use client";
 
 // "Clone My Voice", laid out as twin.memorare.ai's: a name, one recording,
-// and HeyGen's instant clone behind it.
+// and ElevenLabs' instant clone behind it.
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Mic, Upload, X } from "lucide-react";
 
 import { Alert } from "@/components/twin/alert";
-import {
-  cloneVoice,
-  getVoiceClone,
-  heygenErrorMessage,
-  uploadHeygenV3Asset,
-} from "@/lib/heygen/rest";
+import { cloneVoiceFromRecording, elevenLabsErrorMessage } from "@/lib/elevenlabs/rest";
 import { cn } from "@/lib/utils";
 
 const AUDIO_TYPES = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav"];
 const AUDIO_MAX = 50 * 1024 * 1024;
-const POLL_MS = 5000;
-const POLL_LIMIT = 60;
 
 const LABEL =
   "flex items-center gap-2 select-none peer-disabled:cursor-not-allowed peer-disabled:opacity-50 text-sm font-medium text-[var(--sidebar-foreground)] dark:text-[var(--muted-foreground)]";
@@ -30,7 +23,16 @@ const CANCEL_BTN =
 const SUBMIT_BTN =
   "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-[5px] border-0 bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] px-4 py-2 text-xs font-medium text-white shadow-none transition-all hover:brightness-[0.96] active:brightness-[0.92] disabled:pointer-events-none disabled:opacity-50 sm:text-[13px]";
 
-export function CloneVoiceDialog({ open, onClose, onCloned }: { open: boolean; onClose: () => void; onCloned: () => void }) {
+export function CloneVoiceDialog({
+  open,
+  onClose,
+  onCloned,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** The clone is ready to use the moment this is called. */
+  onCloned: (voice: { voice_id: string; name: string }) => void;
+}) {
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,25 +69,12 @@ export function CloneVoiceDialog({ open, onClose, onCloned }: { open: boolean; o
     setBusy(true);
     setError(null);
     try {
-      setStage("Uploading…");
-      const asset = await uploadHeygenV3Asset(file);
       setStage("Cloning…");
-      const { voice_clone_id } = await cloneVoice({ name: name.trim(), assetId: asset.asset_id });
-      // Cloning is asynchronous; wait for it so the new voice is there when we close.
-      for (let i = 0; i < POLL_LIMIT; i++) {
-        const voice = await getVoiceClone(voice_clone_id).catch(() => null);
-        if (voice?.status === "complete") break;
-        if (voice?.status === "failed") throw new Error("heygen: voice cloning failed");
-        await new Promise((r) => setTimeout(r, POLL_MS));
-      }
-      onCloned();
+      const { voice_id } = await cloneVoiceFromRecording({ name: name.trim(), file });
+      onCloned({ voice_id, name: name.trim() });
       onClose();
     } catch (err) {
-      setError(
-        err instanceof Error && /voice cloning failed/.test(err.message)
-          ? "HeyGen couldn't clone that recording. Try a clearer one of at least 30 seconds."
-          : heygenErrorMessage(err, "Couldn't clone your voice. Please try again."),
-      );
+      setError(elevenLabsErrorMessage(err, "Couldn't clone your voice. Try a clearer recording of at least 30 seconds."));
     } finally {
       setBusy(false);
       setStage("");

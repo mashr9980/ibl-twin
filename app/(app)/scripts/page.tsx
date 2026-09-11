@@ -1,17 +1,33 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizontal, Play, Search, Square, Waves } from "lucide-react";
+import { Loader2, MoreHorizontal, Play, Search, Square, Trash2, Waves } from "lucide-react";
 
 import { Alert } from "@/components/twin/alert";
 import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { CloneVoiceDialog } from "@/components/twin/clone-voice-dialog";
 import { cn } from "@/lib/utils";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
-import { listHeygenVoices, listPrivateVoices, type HeygenPrivateVoice, type HeygenVoice } from "@/lib/heygen/rest";
+import {
+  deleteClonedVoice,
+  elevenLabsErrorMessage,
+  elevenLabsStatus,
+  listClonedVoices,
+  PREVIEW_TEXT,
+  speakWithVoice,
+  type ClonedVoice,
+  type ElevenLabsStatus,
+} from "@/lib/elevenlabs/rest";
+import { listHeygenVoices, type HeygenVoice } from "@/lib/heygen/rest";
 
 /** 3,169 voices is ~22k DOM nodes. Same page-at-a-time rule as the gallery. */
 const PAGE = 60;
+
+/** ElevenLabs labels a language by its code. */
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "english", es: "spanish", fr: "french", de: "german", it: "italian", pt: "portuguese", ja: "japanese",
+  ko: "korean", zh: "chinese", hi: "hindi", ar: "arabic", nl: "dutch", pl: "polish", ru: "russian", tr: "turkish",
+};
 
 export default function VoicesPage() {
   const credential = useHeygenCredential();
@@ -21,24 +37,83 @@ export default function VoicesPage() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [shown, setShown] = useState(PAGE);
   const audio = useRef<HTMLAudioElement | null>(null);
-  const [mine, setMine] = useState<HeygenPrivateVoice[] | null>(null);
+  const [mine, setMine] = useState<ClonedVoice[] | null>(null);
+  const [cloning, setCloning] = useState<ElevenLabsStatus | null>(null);
   const [cloneOpen, setCloneOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  // Cloned voices have no stock preview: a sample is made once, then replayed.
+  const samples = useRef(new Map<string, string>());
 
   const loadMine = useCallback(() => {
-    listPrivateVoices()
+    listClonedVoices()
       .then(setMine)
-      .catch(() => {
+      .catch((err) => {
         setMine([]);
-        setError("Couldn't load your cloned voices. Please try again.");
+        setError(elevenLabsErrorMessage(err, "Couldn't load your cloned voices. Please try again."));
       });
   }, []);
 
   useEffect(() => {
     if (credential !== "ok") { if (credential === "missing") setLoading(false); return; }
     listHeygenVoices().then(setVoices).finally(() => setLoading(false));
-    loadMine();
+    elevenLabsStatus().then((status) => {
+      setCloning(status);
+      if (status.ok) loadMine();
+      else setMine([]);
+    });
   }, [credential, loadMine]);
+
+  /** Why cloning is unavailable right now, if it is. */
+  const cloningNotice = !cloning || cloning.ok === undefined
+    ? null
+    : !cloning.ok
+      ? cloning.reason === "no_key"
+        ? "Voice cloning isn't set up for this workspace yet. Ask the workspace owner to connect ElevenLabs."
+        : cloning.reason === "bad_key"
+          ? "The workspace's ElevenLabs key was refused. Ask the workspace owner to check it."
+          : "Voice cloning is unavailable right now. Please try again in a moment."
+      : cloning.canClone === false
+        ? "This workspace's ElevenLabs plan doesn't include instant voice cloning."
+        : cloning.slotsFree === false
+          ? "The workspace has used all of its ElevenLabs voice slots. Delete a voice to make room."
+          : null;
+
+  async function toggleMine(v: ClonedVoice) {
+    if (playing === v.voice_id) { audio.current?.pause(); setPlaying(null); return; }
+    if (preparing) return;
+    let src = v.preview_url || samples.current.get(v.voice_id);
+    if (!src) {
+      setPreparing(v.voice_id);
+      try {
+        src = URL.createObjectURL(await speakWithVoice(v.voice_id, PREVIEW_TEXT));
+        samples.current.set(v.voice_id, src);
+      } catch (err) {
+        setError(elevenLabsErrorMessage(err, "Couldn't play a preview of that voice. Please try again."));
+        return;
+      } finally {
+        setPreparing(null);
+      }
+    }
+    toggle({ voice_id: v.voice_id, name: v.name, preview_audio: src });
+  }
+
+  async function removeMine(v: ClonedVoice) {
+    if (deleting || !window.confirm(`Delete the voice "${v.name}"? Videos already made with it are kept.`)) return;
+    setDeleting(v.voice_id);
+    setError(null);
+    try {
+      await deleteClonedVoice(v.voice_id);
+      if (playing === v.voice_id) { audio.current?.pause(); setPlaying(null); }
+      setMine((list) => (list ?? []).filter((x) => x.voice_id !== v.voice_id));
+      setCloning((s) => (s?.slots ? { ...s, slotsFree: true, slots: { ...s.slots, used: Math.max(0, s.slots.used - 1) } } : s));
+    } catch (err) {
+      setError(elevenLabsErrorMessage(err, "Couldn't delete that voice. Please try again."));
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   const matching = useMemo(
     () => voices.filter((v) => !q || (v.name ?? "").toLowerCase().includes(q.toLowerCase())),
@@ -82,7 +157,7 @@ export default function VoicesPage() {
     portuguese: "🇵🇹", japanese: "🇯🇵", korean: "🇰🇷", chinese: "🇨🇳", hindi: "🇮🇳",
     arabic: "🇸🇦", dutch: "🇳🇱", polish: "🇵🇱", russian: "🇷🇺", turkish: "🇹🇷",
   };
-  const flagOf = (lang?: string | null) => FLAGS[(lang ?? "").toLowerCase()] ?? "🌐";
+  const flagOf = (lang?: string | null) => FLAGS[(lang ?? "").toLowerCase()] ?? FLAGS[LANGUAGE_NAMES[(lang ?? "").toLowerCase()] ?? ""] ?? "🌐";
 
   return (
     <div className="flex min-h-full w-full min-w-0 max-w-full flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
@@ -118,6 +193,7 @@ export default function VoicesPage() {
           <section className="mb-10">
             <h2 className="mb-4 text-sm font-semibold text-[var(--content-title)] sm:text-base">My Voices</h2>
             {error && <Alert tone="warning" className="mb-4" onDismiss={() => setError(null)}>{error}</Alert>}
+            {cloningNotice && <Alert tone="warning" className="mb-4">{cloningNotice}</Alert>}
             {mine && mine.length > 0 ? (
               <div className="rounded-[9px] border border-[var(--border)] bg-[var(--card)] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 {mine.map((v) => (
@@ -125,25 +201,38 @@ export default function VoicesPage() {
                     <div
                       role="button"
                       tabIndex={0}
-                      aria-label={`Preview ${v.name ?? "voice"}`}
-                      onClick={() => toggle({ voice_id: v.voice_id, name: v.name, preview_audio: v.preview_audio_url })}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle({ voice_id: v.voice_id, name: v.name, preview_audio: v.preview_audio_url }); } }}
+                      aria-label={`Preview ${v.name}`}
+                      aria-busy={preparing === v.voice_id}
+                      onClick={() => void toggleMine(v)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void toggleMine(v); } }}
                       className="flex min-w-0 flex-1 cursor-pointer touch-manipulation items-start gap-3"
                     >
                       <span className={cn("relative flex size-10 shrink-0 items-center justify-center rounded-[5px] bg-gradient-to-br text-white sm:size-12", swatch(v.voice_id))}>
-                        {playing === v.voice_id ? <Square size={14} className="fill-white" /> : <Play size={14} className="fill-white" strokeWidth={0} />}
+                        {preparing === v.voice_id ? <Loader2 size={14} className="animate-spin" /> : playing === v.voice_id ? <Square size={14} className="fill-white" /> : <Play size={14} className="fill-white" strokeWidth={0} />}
                       </span>
                       <div className="min-w-0 flex-1 text-left">
                         <p className="text-xs font-semibold text-[var(--content-title)] sm:text-[13px]">{v.name}</p>
                         <p className="mt-0.5 text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">
-                          {v.status && v.status !== "complete" ? "Cloning…" : "Cloned voice"}
+                          {preparing === v.voice_id ? "Preparing a preview…" : "Cloned voice"}
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-[60px] sm:pl-0">
                       <div className="flex items-center gap-1.5 text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">
-                        <span className="text-base leading-none" aria-hidden="true">{flagOf(v.language)}</span>
-                        <span>{v.language ?? "Unknown"}</span>
+                        <span className="text-base leading-none" aria-hidden="true">{flagOf(v.labels?.language)}</span>
+                        <span>{v.labels?.language ? LANGUAGE_NAMES[v.labels.language.toLowerCase()] ?? v.labels.language : "Your voice"}</span>
+                      </div>
+                      <span className="text-[11px] leading-snug text-[var(--content-title)] sm:text-xs">Cloned</span>
+                      <div className="ml-auto flex shrink-0 items-center gap-1 sm:ml-0">
+                        <button
+                          type="button"
+                          aria-label={`Delete ${v.name}`}
+                          disabled={deleting === v.voice_id}
+                          onClick={() => void removeMine(v)}
+                          className="inline-flex size-11 min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--destructive)] disabled:pointer-events-none disabled:opacity-50 sm:size-8 sm:min-h-0 sm:min-w-0"
+                        >
+                          {deleting === v.voice_id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} strokeWidth={1.75} />}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -242,7 +331,15 @@ export default function VoicesPage() {
         </>
       )}
 
-      <CloneVoiceDialog open={cloneOpen} onClose={() => setCloneOpen(false)} onCloned={loadMine} />
+      <CloneVoiceDialog
+        open={cloneOpen}
+        onClose={() => setCloneOpen(false)}
+        onCloned={() => {
+          setError(null);
+          setCloning((s) => (s?.slots ? { ...s, slots: { ...s.slots, used: s.slots.used + 1 }, slotsFree: s.slots.limit === 0 || s.slots.used + 1 < s.slots.limit } : s));
+          loadMine();
+        }}
+      />
     </div>
   );
 }

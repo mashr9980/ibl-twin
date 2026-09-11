@@ -8,15 +8,16 @@ import { Check, ChevronDown, ImageIcon, Link as LinkIcon, Sparkles, Upload } fro
 
 import { HeygenGate } from "@/components/twin/avatar-gallery";
 import { useHeygenCredential } from "@/hooks/use-heygen-credential";
+import { asClonedVoiceId, clonedVoiceId, listClonedVoices, speakWithVoice, type ClonedVoice } from "@/lib/elevenlabs/rest";
 import {
   createVideoClip,
-  heygenErrorMessage,
   uploadHeygenV3Asset,
   listHeygenVoices,
   type HeygenVoice,
 } from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
 import { Alert } from "@/components/twin/alert";
+import { voiceErrorMessage } from "@/components/twin/generate-modal";
 import { cn } from "@/lib/utils";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -49,6 +50,7 @@ export default function CreateVideoClipPage() {
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState<Ratio>("16:9");
   const [voices, setVoices] = useState<HeygenVoice[]>([]);
+  const [cloned, setCloned] = useState<ClonedVoice[]>([]);
   const [voiceId, setVoiceId] = useState("");
   const [voiceOpen, setVoiceOpen] = useState(false);
   const voiceRef = useRef<HTMLDivElement>(null);
@@ -60,6 +62,8 @@ export default function CreateVideoClipPage() {
         if (v[0]) setVoiceId((cur) => cur || v[0].voice_id);
       })
       .catch(() => setError("Couldn't load voices. Please try again."));
+    // The member's clones lead the list; none (or no ElevenLabs key) just means no group.
+    listClonedVoices().then(setCloned).catch(() => {});
   }, [credential]);
   useEffect(() => {
     if (!voiceOpen) return;
@@ -69,7 +73,12 @@ export default function CreateVideoClipPage() {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [voiceOpen]);
-  const voice = voices.find((v) => v.voice_id === voiceId);
+  const options: (HeygenVoice & { cloned?: boolean })[] = [
+    ...cloned.map((c) => ({ voice_id: asClonedVoiceId(c.voice_id), name: c.name, cloned: true })),
+    ...voices,
+  ];
+  const voice = options.find((v) => v.voice_id === voiceId);
+  const clonedId = clonedVoiceId(voiceId);
   const [modelId, setModelId] = useState<(typeof MODELS)[number]["id"]>("veo3");
   const [modelOpen, setModelOpen] = useState(false);
   const modelRef = useRef<HTMLDivElement>(null);
@@ -110,10 +119,15 @@ export default function CreateVideoClipPage() {
     const title = prompt.trim().length > 60 ? `${prompt.trim().slice(0, 60)}…` : prompt.trim();
     try {
       const asset = await uploadHeygenV3Asset(file);
+      // A cloned voice speaks the script first (ElevenLabs); HeyGen then lip-syncs that recording.
+      let audioAssetId: string | undefined;
+      if (clonedId) {
+        const speech = await speakWithVoice(clonedId, prompt.trim());
+        audioAssetId = (await uploadHeygenV3Asset(speech, "speech.mp3")).asset_id;
+      }
       const { video_id } = await createVideoClip({
         asset_id: asset.asset_id,
-        script: prompt.trim(),
-        voice_id: voiceId,
+        ...(audioAssetId ? { audio_asset_id: audioAssetId } : { script: prompt.trim(), voice_id: voiceId }),
         aspect_ratio: ratio,
         title,
       });
@@ -126,7 +140,7 @@ export default function CreateVideoClipPage() {
       }).catch(() => {});
       router.push("/videos/my?type=clip");
     } catch (err) {
-      setError(heygenErrorMessage(err, "Video generation failed. Please try again."));
+      setError(voiceErrorMessage(err, "Video generation failed. Please try again."));
       setBusy(false);
     }
   }
@@ -255,26 +269,33 @@ export default function CreateVideoClipPage() {
             <div ref={voiceRef} className="relative rounded-[9px] border border-[var(--border)] bg-[var(--card)] p-4 text-[var(--card-foreground)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
               <span className="mb-3 block text-xs font-medium text-[var(--content-title)] sm:text-[13px]">Voice</span>
               <button type="button" role="combobox" aria-expanded={voiceOpen} aria-label={`Voice: ${voice?.name ?? "none selected"}`}
-                onClick={() => setVoiceOpen((v) => !v)} disabled={!voices.length}
+                onClick={() => setVoiceOpen((v) => !v)} disabled={!options.length}
                 className="flex h-10 w-full items-center justify-between gap-2 rounded-[8px] border border-[var(--input)] bg-[var(--background)] px-3 text-left text-[13px] text-[var(--content-title)] shadow-sm outline-none transition-colors hover:bg-[var(--accent)] focus-visible:border-[var(--brand)] disabled:opacity-50">
-                <span className="truncate">{voice ? `${voice.name}${voice.language ? ` · ${voice.language}` : ""}` : voices.length ? "Choose a voice" : "Loading voices…"}</span>
+                <span className="truncate">{voice ? `${voice.name}${voice.cloned ? " · Cloned" : voice.language ? ` · ${voice.language}` : ""}` : options.length ? "Choose a voice" : "Loading voices…"}</span>
                 <ChevronDown className="size-4 shrink-0 text-[var(--muted-foreground)]" strokeWidth={1.75} aria-hidden />
               </button>
               {voiceOpen && (
                 <ul role="listbox" aria-label="Voice" className="absolute left-4 right-4 z-30 mt-1 max-h-64 overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--popover)] p-1 shadow-[var(--shadow-popover)] sm:left-5 sm:right-5">
-                  {voices.map((v) => (
+                  {options.map((v, i) => (
                     <li key={v.voice_id}>
+                      {cloned.length > 0 && (i === 0 || i === cloned.length) && (
+                        <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--content-caption)] sm:text-[11px]">
+                          {i === 0 ? "My voices" : "Standard voices"}
+                        </p>
+                      )}
                       <button type="button" role="option" aria-selected={v.voice_id === voiceId}
                         onClick={() => { setVoiceId(v.voice_id); setVoiceOpen(false); }}
                         className={cn("flex w-full items-center justify-between rounded-[5px] px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-[var(--accent)]", v.voice_id === voiceId && "bg-[var(--composer-chip)] text-[var(--brand)]")}>
                         <span className="truncate">{v.name}</span>
-                        {v.language && <span className="ml-2 shrink-0 text-[11px] text-[var(--content-caption)]">{v.language}</span>}
+                        {v.cloned ? <span className="ml-2 shrink-0 text-[11px] text-[var(--content-caption)]">Cloned</span> : v.language && <span className="ml-2 shrink-0 text-[11px] text-[var(--content-caption)]">{v.language}</span>}
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="mt-2 text-[11px] leading-snug text-[var(--content-caption)]">The person in your picture speaks your text in this voice.</p>
+              <p className="mt-2 text-[11px] leading-snug text-[var(--content-caption)]">
+                {clonedId ? "The person in your picture speaks your text in your cloned voice." : "The person in your picture speaks your text in this voice."}
+              </p>
             </div>
 
             <div className="relative">

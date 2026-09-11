@@ -296,46 +296,6 @@ export async function listHeygenVoices(): Promise<HeygenVoice[]> {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Voice cloning (HeyGen Instant Clone, /v3/voices)
-
-export interface HeygenPrivateVoice {
-  voice_id: string;
-  name?: string | null;
-  language?: string | null;
-  gender?: string | null;
-  preview_audio_url?: string | null;
-  status?: string | null;
-  type?: string | null;
-}
-
-/** The voices this account cloned; a fresh clone appears here once it is complete. */
-export async function listPrivateVoices(): Promise<HeygenPrivateVoice[]> {
-  const body = await request<{ data?: HeygenPrivateVoice[] }>("/v3/voices", {
-    query: { type: "private", limit: 100 },
-  });
-  return Array.isArray(body?.data) ? body.data : [];
-}
-
-/** Start an instant clone from an uploaded recording. Cloning runs asynchronously. */
-export async function cloneVoice(input: { name: string; assetId: string }): Promise<{ voice_clone_id: string }> {
-  return unwrap(
-    await request<{ data?: { voice_clone_id: string } } & Partial<{ voice_clone_id: string }>>("/v3/voices/clone", {
-      method: "POST",
-      body: { voice_name: input.name, audio: { type: "asset_id", asset_id: input.assetId } },
-    }),
-  );
-}
-
-/** "processing", "complete" or "failed". */
-export async function getVoiceClone(voiceId: string): Promise<HeygenPrivateVoice> {
-  return unwrap<HeygenPrivateVoice>(
-    await request<{ data?: HeygenPrivateVoice } & Partial<HeygenPrivateVoice>>(
-      `/v3/voices/${encodeURIComponent(voiceId)}`,
-    ),
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────
 // Assets + photo twins (HeyGen "photo avatar" groups)
 //
 // Create Twin pipeline:
@@ -441,8 +401,11 @@ export interface CreateVideoInput {
   avatar_id: string;
   /** Set for the user's twin: the look is addressed as a talking photo, not a studio avatar. */
   talking_photo?: boolean;
-  voice_id: string;
-  script: string;
+  /** A HeyGen voice reads the script… */
+  voice_id?: string;
+  script?: string;
+  /** …or the avatar lip-syncs an uploaded recording (POST /v1/asset). */
+  audio_asset_id?: string;
   title: string;
   orientation: Orientation;
   /** 0.5 – 1.5, HeyGen's supported TTS speed range. */
@@ -461,12 +424,14 @@ export async function createVideo(input: CreateVideoInput): Promise<{ video_id: 
             character: input.talking_photo
               ? { type: "talking_photo", talking_photo_id: input.avatar_id }
               : { type: "avatar", avatar_id: input.avatar_id, avatar_style: "normal" },
-            voice: {
-              type: "text",
-              voice_id: input.voice_id,
-              input_text: input.script,
-              ...(input.speed && input.speed !== 1 ? { speed: input.speed } : {}),
-            },
+            voice: input.audio_asset_id
+              ? { type: "audio", audio_asset_id: input.audio_asset_id }
+              : {
+                  type: "text",
+                  voice_id: input.voice_id,
+                  input_text: input.script,
+                  ...(input.speed && input.speed !== 1 ? { speed: input.speed } : {}),
+                },
           },
         ],
       },
@@ -517,10 +482,10 @@ export interface HeygenV3Asset {
   mime_type?: string;
 }
 
-/** POST /v3/assets (multipart) → {asset_id, url}; what /v3/videos accepts as an image. */
-export async function uploadHeygenV3Asset(file: File | Blob): Promise<HeygenV3Asset> {
+/** POST /v3/assets (multipart) → {asset_id, url}; what /v3/videos accepts as an image or a recording. */
+export async function uploadHeygenV3Asset(file: File | Blob, filename = "image"): Promise<HeygenV3Asset> {
   const form = new FormData();
-  form.append("file", file, file instanceof File ? file.name : "image");
+  form.append("file", file, file instanceof File ? file.name : filename);
   const res = await fetchWithTimeout(
     `${API_BASE}/v3/assets`,
     { method: "POST", headers: { ...authHeaders(), Accept: "application/json" }, body: form },
@@ -534,8 +499,11 @@ export async function uploadHeygenV3Asset(file: File | Blob): Promise<HeygenV3As
 export interface CreateClipInput {
   asset_id?: string;
   image_url?: string;
-  script: string;
-  voice_id: string;
+  /** A HeyGen voice reads the script… */
+  script?: string;
+  voice_id?: string;
+  /** …or the picture lip-syncs an uploaded recording (POST /v3/assets). */
+  audio_asset_id?: string;
   aspect_ratio?: "16:9" | "9:16" | "1:1" | "auto";
   title?: string;
   speed?: number;
@@ -548,12 +516,16 @@ export async function createVideoClip(input: CreateClipInput): Promise<{ video_i
       body: {
         type: "image",
         image: input.asset_id ? { type: "asset_id", asset_id: input.asset_id } : { type: "url", url: input.image_url },
-        script: input.script,
-        voice_id: input.voice_id,
+        ...(input.audio_asset_id
+          ? { audio_asset_id: input.audio_asset_id }
+          : {
+              script: input.script,
+              voice_id: input.voice_id,
+              ...(input.speed && input.speed !== 1 ? { voice_settings: { speed: input.speed } } : {}),
+            }),
         title: input.title,
         aspect_ratio: input.aspect_ratio ?? "16:9",
         resolution: "1080p",
-        ...(input.speed && input.speed !== 1 ? { voice_settings: { speed: input.speed } } : {}),
       },
     }),
   );

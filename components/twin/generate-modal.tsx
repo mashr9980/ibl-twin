@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
+  Loader2,
   Maximize,
   Mic,
   Minimize2,
@@ -19,12 +20,37 @@ import {
   X,
 } from "lucide-react";
 
-import { createVideo, listHeygenVoices, type HeygenAvatar, type HeygenVoice, type Orientation, heygenErrorMessage } from "@/lib/heygen/rest";
+import {
+  asClonedVoiceId,
+  clonedVoiceId,
+  elevenLabsErrorMessage,
+  isElevenLabsError,
+  listClonedVoices,
+  PREVIEW_TEXT,
+  speakWithVoice,
+  type ClonedVoice,
+} from "@/lib/elevenlabs/rest";
+import { createVideo, listHeygenVoices, uploadHeygenAsset, type HeygenAvatar, type HeygenVoice, type Orientation, heygenErrorMessage } from "@/lib/heygen/rest";
 import { rememberVideo } from "@/lib/twin/local-library";
 import { Alert } from "@/components/twin/alert";
+import { CloneVoiceDialog } from "@/components/twin/clone-voice-dialog";
 import { cn } from "@/lib/utils";
 
 const SCRIPT_MAX = 840;
+
+/** One entry of the voice picker: a HeyGen voice, or one of the member's clones (id prefixed). */
+type VoiceOption = HeygenVoice & { cloned?: boolean };
+
+const asOption = (c: ClonedVoice): VoiceOption => ({
+  voice_id: asClonedVoiceId(c.voice_id),
+  name: c.name,
+  preview_audio: c.preview_url ?? null,
+  cloned: true,
+});
+
+/** A HeyGen or ElevenLabs failure, in one plain sentence. */
+export const voiceErrorMessage = (err: unknown, fallback: string) =>
+  isElevenLabsError(err) ? elevenLabsErrorMessage(err, fallback) : heygenErrorMessage(err, fallback);
 
 const SURPRISE = [
   "Hi, I'm your AI twin. Today I'll walk you through the three things that make a lesson stick: a clear goal, one worked example, and a question you can't answer without thinking.",
@@ -54,6 +80,8 @@ export function GenerateModal({
 }) {
   const router = useRouter();
   const [voices, setVoices] = useState<HeygenVoice[]>([]);
+  const [cloned, setCloned] = useState<ClonedVoice[]>([]);
+  const [cloneOpen, setCloneOpen] = useState(false);
   const [voiceId, setVoiceId] = useState("");
   const [script, setScript] = useState("");
   const [speed, setSpeed] = useState(1);
@@ -63,9 +91,13 @@ export function GenerateModal({
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [fit, setFit] = useState<"cover" | "fit">("cover");
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
+  // A cloned voice has no stock preview: a sample is made once, then replayed.
+  const samples = useRef(new Map<string, string>());
 
   useEffect(() => {
     listHeygenVoices()
@@ -74,21 +106,39 @@ export function GenerateModal({
         if (v[0]) setVoiceId((cur) => cur || v[0].voice_id);
       })
       .catch(() => setError("Couldn't load voices. Please try again."));
+    // No clones, or no ElevenLabs key, simply means no "My voices" group.
+    listClonedVoices().then(setCloned).catch(() => {});
   }, []);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !busy && !cloneOpen && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+  }, [busy, cloneOpen, onClose]);
 
-  const voice = useMemo(() => voices.find((v) => v.voice_id === voiceId), [voices, voiceId]);
+  const options = useMemo<VoiceOption[]>(() => [...cloned.map(asOption), ...voices], [cloned, voices]);
+  const voice = useMemo(() => options.find((v) => v.voice_id === voiceId), [options, voiceId]);
+  const clonedId = clonedVoiceId(voiceId);
 
-  function togglePreview() {
-    if (!voice?.preview_audio) return;
-    if (!audio.current || audio.current.src !== voice.preview_audio) {
+  async function togglePreview() {
+    if (!voice || preparing) return;
+    let src = voice.preview_audio || (clonedId ? samples.current.get(clonedId) : null);
+    if (!src && clonedId) {
+      setPreparing(true);
+      try {
+        src = URL.createObjectURL(await speakWithVoice(clonedId, PREVIEW_TEXT));
+        samples.current.set(clonedId, src);
+      } catch (err) {
+        setError(elevenLabsErrorMessage(err, "Couldn't play a preview of that voice. Please try again."));
+        return;
+      } finally {
+        setPreparing(false);
+      }
+    }
+    if (!src) return;
+    if (!audio.current || audio.current.src !== src) {
       audio.current?.pause();
-      audio.current = new Audio(voice.preview_audio);
+      audio.current = new Audio(src);
       audio.current.onended = () => setPlaying(false);
     }
     if (playing) {
@@ -108,14 +158,21 @@ export function GenerateModal({
     // Twin opens with neither orientation pressed; those renders go landscape.
     const chosen: Orientation = orientation ?? "landscape";
     try {
+      // A cloned voice speaks the script first (ElevenLabs); HeyGen then lip-syncs that recording.
+      let audioAssetId: string | undefined;
+      if (clonedId) {
+        setStage("Recording your voice…");
+        const speech = await speakWithVoice(clonedId, script.trim(), speed);
+        const asset = await uploadHeygenAsset(new File([speech], "speech.mp3", { type: "audio/mpeg" }));
+        audioAssetId = asset.id;
+      }
+      setStage("Generating…");
       const { video_id } = await createVideo({
         avatar_id: avatar.avatar_id,
         talking_photo: kind === "twin",
-        voice_id: voiceId,
-        script: script.trim(),
+        ...(audioAssetId ? { audio_asset_id: audioAssetId } : { voice_id: voiceId, script: script.trim(), speed }),
         title,
         orientation: chosen,
-        speed,
       });
       await rememberVideo({
         id: video_id,
@@ -128,8 +185,9 @@ export function GenerateModal({
       onGenerated?.();
       router.push(`/videos/my?type=${kind}`);
     } catch (err) {
-      setError(heygenErrorMessage(err, "Video generation failed. Please try again."));
+      setError(voiceErrorMessage(err, "Video generation failed. Please try again."));
       setBusy(false);
+      setStage("");
     }
   }
 
@@ -229,8 +287,8 @@ export function GenerateModal({
               <div className="flex flex-col gap-5 p-4 sm:gap-6 sm:p-5">
                 <section className="space-y-3">
                   <h3 className="text-[13px] font-semibold text-[var(--content-title)] sm:text-sm">Voice</h3>
-                  <button type="button"
-                    className="flex w-full items-center justify-center gap-2 rounded-[5px] border border-dashed border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] px-4 py-6 transition-colors hover:border-[var(--brand)] hover:bg-[color-mix(in_oklab,var(--composer-chip)_40%,transparent)]">
+                  <button type="button" onClick={() => setCloneOpen(true)} disabled={busy}
+                    className="flex w-full items-center justify-center gap-2 rounded-[5px] border border-dashed border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_40%,transparent)] px-4 py-6 transition-colors hover:border-[var(--brand)] hover:bg-[color-mix(in_oklab,var(--composer-chip)_40%,transparent)] disabled:pointer-events-none disabled:opacity-50">
                     <Mic className="size-5 text-[var(--muted-foreground)]" strokeWidth={1.5} aria-hidden />
                     <span className="text-xs leading-snug text-[var(--content-title)] sm:text-[13px]">
                       Upload or Record Your Voice
@@ -246,8 +304,8 @@ export function GenerateModal({
                     <div className="flex min-w-0 items-center gap-2">
                       <div className="relative min-w-0 flex-1">
                         <button type="button" role="combobox" aria-expanded={voiceOpen}
-                          aria-label={`Standard voice: ${voice?.name ?? "none selected"}`}
-                          disabled={!voices.length} onClick={() => setVoiceOpen((v) => !v)}
+                          aria-label={`Voice: ${voice?.name ?? "none selected"}`}
+                          disabled={!options.length} onClick={() => setVoiceOpen((v) => !v)}
                           className="flex h-9 min-h-9 w-full min-w-0 items-center justify-between overflow-hidden rounded-[8px] border border-[var(--input)] bg-[var(--background)] py-1.5 pl-3 pr-2 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
                           <span className="flex w-full min-w-0 items-center gap-2 overflow-hidden text-left">
                             <span aria-hidden="true"
@@ -263,8 +321,13 @@ export function GenerateModal({
 
                         {voiceOpen && (
                           <ul role="listbox" className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--popover)] p-1 shadow-[var(--shadow-popover)]">
-                            {voices.map((v) => (
+                            {options.map((v, i) => (
                               <li key={v.voice_id}>
+                                {cloned.length > 0 && (i === 0 || i === cloned.length) && (
+                                  <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--content-caption)] sm:text-[11px]">
+                                    {i === 0 ? "My voices" : "Standard voices"}
+                                  </p>
+                                )}
                                 <button type="button" role="option" aria-selected={v.voice_id === voiceId}
                                   onClick={() => { setVoiceId(v.voice_id); setVoiceOpen(false); }}
                                   className={cn("block w-full truncate rounded-[5px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--accent)]",
@@ -277,15 +340,15 @@ export function GenerateModal({
                         )}
                       </div>
 
-                      <button type="button" onClick={togglePreview} disabled={!voice?.preview_audio}
-                        aria-label={`Preview ${voice?.name ?? "voice"}`}
+                      <button type="button" onClick={() => void togglePreview()} disabled={!voice || (!voice.preview_audio && !clonedId) || preparing}
+                        aria-label={`Preview ${voice?.name ?? "voice"}`} aria-busy={preparing}
                         className="inline-flex size-9 min-h-9 min-w-9 shrink-0 touch-manipulation items-center justify-center rounded-[5px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] text-white shadow-[0_2px_6px_rgba(15,23,42,0.1)] transition-[filter] hover:brightness-[0.96] active:brightness-[0.92] disabled:pointer-events-none disabled:opacity-50 sm:size-7 sm:min-h-0 sm:min-w-0">
-                        <Play className="relative left-px size-3 fill-white text-white" strokeWidth={0} aria-hidden />
+                        {preparing ? <Loader2 className="size-3 animate-spin" strokeWidth={2} aria-hidden /> : <Play className="relative left-px size-3 fill-white text-white" strokeWidth={0} aria-hidden />}
                       </button>
                     </div>
 
                     <p className="text-[10px] leading-snug text-[var(--content-caption)] sm:text-[11px]">
-                      Choose a voice to hear its preview, or tap play again to stop.
+                      {clonedId ? "Your cloned voice reads the script. Tap play to hear a sample." : "Choose a voice to hear its preview, or tap play again to stop."}
                     </p>
                   </div>
                 </section>
@@ -335,6 +398,11 @@ export function GenerateModal({
                     <span>0.5x</span>
                     <span>1.5x</span>
                   </div>
+                  {clonedId && (speed < 0.7 || speed > 1.2) && (
+                    <p className="text-[10px] leading-snug text-[var(--content-caption)] sm:text-[11px]">
+                      Cloned voices go from 0.7x to 1.2x; {speed < 0.7 ? "0.7x" : "1.2x"} will be used.
+                    </p>
+                  )}
                 </section>
 
                 {error && <Alert tone="warning" onDismiss={() => setError(null)}>{error}</Alert>}
@@ -345,7 +413,7 @@ export function GenerateModal({
           <div className="flex w-full shrink-0 flex-col flex-wrap justify-end gap-0 border-t border-[var(--border)] bg-[var(--card)] p-4 sm:flex-col sm:p-5 lg:col-start-2 lg:row-start-2 lg:border-t-0">
             <button type="button" onClick={generate} disabled={busy || !script.trim() || !voiceId} aria-busy={busy}
               className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-[5px] border-0 bg-gradient-to-r from-[var(--brand)] to-[var(--brand-violet)] px-4 py-2 text-xs font-medium text-white shadow-none transition-all hover:brightness-[0.96] active:brightness-[0.92] disabled:pointer-events-none disabled:opacity-50 sm:h-11 sm:text-[13px]">
-              {busy ? "Generating…" : "Generate AI Avatar Video"}
+              {busy ? stage || "Generating…" : "Generate AI Avatar Video"}
             </button>
           </div>
         </div>
@@ -356,6 +424,15 @@ export function GenerateModal({
           <span className="sr-only">Close</span>
         </button>
       </div>
+
+      <CloneVoiceDialog
+        open={cloneOpen}
+        onClose={() => setCloneOpen(false)}
+        onCloned={(v) => {
+          setCloned((list) => [{ voice_id: v.voice_id, name: v.name }, ...list.filter((c) => c.voice_id !== v.voice_id)]);
+          setVoiceId(asClonedVoiceId(v.voice_id));
+        }}
+      />
     </div>
   );
 }
