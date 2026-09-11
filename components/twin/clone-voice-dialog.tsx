@@ -11,7 +11,10 @@ import { Alert } from "@/components/twin/alert";
 import { cloneVoiceFromRecording, elevenLabsErrorMessage } from "@/lib/elevenlabs/rest";
 import { cn } from "@/lib/utils";
 
-const AUDIO_TYPES = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav"];
+// What ElevenLabs clones from; browsers label these files inconsistently, so the name decides too.
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|webm|aiff?)$/i;
+const AUDIO_ACCEPT = "audio/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac,.webm,.aiff,.aif";
+const isAudio = (f: File) => AUDIO_EXT.test(f.name) || f.type.startsWith("audio/");
 const AUDIO_MAX = 50 * 1024 * 1024;
 
 const LABEL =
@@ -57,7 +60,7 @@ export function CloneVoiceDialog({
 
   function pick(chosen: File) {
     setError(null);
-    if (!AUDIO_TYPES.includes(chosen.type)) return setError("Supported formats: MP3 and WAV.");
+    if (!isAudio(chosen)) return setError("Supported formats: MP3, WAV, M4A, AAC, OGG, FLAC, WEBM and AIFF.");
     if (chosen.size > AUDIO_MAX) return setError("That recording is over 50MB. Please use a shorter one.");
     setFile(chosen);
     if (!name.trim()) setName(chosen.name.replace(/\.[^.]+$/, ""));
@@ -124,7 +127,7 @@ export function CloneVoiceDialog({
                 <span className={LABEL}>Audio File</span>
                 <input
                   ref={input}
-                  accept={AUDIO_TYPES.join(",")}
+                  accept={AUDIO_ACCEPT}
                   className="sr-only"
                   type="file"
                   onChange={(e) => {
@@ -143,7 +146,7 @@ export function CloneVoiceDialog({
                 >
                   <Upload className="mb-3 size-8 text-[var(--muted-foreground)]" strokeWidth={1.25} aria-hidden />
                   <p className="text-center text-xs leading-snug text-[var(--sidebar-foreground)] dark:text-[var(--muted-foreground)] sm:text-[13px]">
-                    {file ? file.name : "Click to upload MP3 or WAV"}
+                    {file ? file.name : "Click to upload MP3, WAV, M4A, OGG, FLAC or another audio file"}
                   </p>
                 </button>
               </div>
